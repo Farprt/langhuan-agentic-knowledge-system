@@ -1,0 +1,59 @@
+# Local configuration and credentials
+langhuan.toml
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.dpapi
+*credentials*.json
+*secret*.json
+
+# Knowledge content, generated indexes and telemetry
+.langhuan/
+data/
+logs/
+*.jsonl
+*.pkl
+*.pickle
+*.sqlite
+*.sqlite3
+*.db
+index.json
+index_state*.json
+obsidian_chroma_db/
+chroma*/
+
+# Models and caches
+.cache/
+hf_cache/
+models/
+*.safetensors
+*.onnx
+*.pt
+*.pth
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Showcase build output
+showcase/node_modules/
+showcase/.next/
+showcase/dist/
+showcase/.wrangler/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

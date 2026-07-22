@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langhuan"
+version = "0.1.0"
+description = "Local-first hybrid retrieval for Obsidian and Markdown projects"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Farprt" }]
+keywords = ["obsidian", "rag", "retrieval", "knowledge-base", "agents"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Text Processing :: Indexing",
+]
+dependencies = []
+
+[project.optional-dependencies]
+models = ["sentence-transformers>=3,<6"]
+
+[project.scripts]
+langhuan = "langhuan.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Farprt/langhuan-agentic-knowledge-system"
+Repository = "https://github.com/Farprt/langhuan-agentic-knowledge-system"
+Documentation = "https://github.com/Farprt/Obsidian_Notes_Workspace"
+
+[tool.setuptools.packages.find]
+where = ["src"]

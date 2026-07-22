@@ -1,0 +1,27 @@
+[vault]
+path = "examples/demo-vault"
+include = ["Home", "Projects", "Sources", "Concepts", "Maps", "Areas"]
+exclude = [".git", ".obsidian", ".langhuan", "Assets", "Inbox/Processing"]
+
+[index]
+data_dir = ".langhuan"
+chunk_size = 1200
+chunk_overlap = 150
+
+[retrieval]
+embedding_model = "hash"
+reranker_model = ""
+dense_candidates = 40
+sparse_candidates = 40
+top_k = 6
+rrf_k = 60
+
+[observability]
+enabled = true
+include_content = false
+
+[scopes.reading]
+paths = ["Sources/Books", "Sources/Papers"]
+
+[scopes.projects]
+paths = ["Projects"]
