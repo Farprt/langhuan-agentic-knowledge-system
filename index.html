@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Langhuan — Agentic Knowledge System</title>
+    <meta name="description" content="面向 Obsidian / Markdown 项目的本地优先 RAG、记忆与可观测基础设施。">
+    <meta property="og:title" content="Langhuan — Agentic Knowledge System">
+    <meta property="og:description" content="Local-first knowledge infrastructure for coding agents.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://farprt.github.io/langhuan-agentic-knowledge-system/">
+    <meta property="og:image" content="https://raw.githubusercontent.com/Farprt/langhuan-agentic-knowledge-system/main/showcase/public/og.png">
+    <link rel="canonical" href="https://farprt.github.io/langhuan-agentic-knowledge-system/">
+    <link rel="icon" href="public/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <main id="main-content">
+      <header class="site-header">
+        <a class="brand" href="#top" aria-label="Langhuan 首页"><span class="brand-mark">琅</span><span>Langhuan</span></a>
+        <nav aria-label="页面导航">
+          <a href="#architecture">架构</a><a href="#evidence">工程证据</a><a href="#quickstart">上手</a><a href="#privacy">边界</a>
+        </nav>
+        <a class="header-link" href="https://github.com/Farprt/langhuan-agentic-knowledge-system">GitHub ↗</a>
+      </header>
+
+      <section class="hero section-shell" id="top">
+        <div class="hero-copy">
+          <p class="kicker">LOCAL-FIRST · OBSIDIAN-NATIVE · AGENT-READY</p>
+          <h1>让 Agent 使用你的知识库，<span>而不是淹没在上下文里。</span></h1>
+          <p class="hero-lede">Langhuan 是面向 Obsidian / Markdown 项目的本地优先知识基础设施：结构化 RAG、增量同步、可选长期记忆，以及可替换的可观测出口。</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#quickstart">5 分钟了解项目</a>
+            <a class="button secondary" href="https://github.com/Farprt/Obsidian_Notes_Workspace">查看参考知识库</a>
+          </div>
+          <p class="hero-note">配套但不绑定：公开知识库是参考实现，任意相近目录结构都可通过一个 profile 接入。</p>
+        </div>
+
+        <div class="flow-console">
+          <div class="console-topline"><span>AGENT CONTEXT PIPELINE</span><span class="status-dot">LOCAL</span></div>
+          <div class="flow-tabs" role="tablist" aria-label="选择流水线阶段">
+            <button class="active" id="tab-task" role="tab" aria-selected="true" aria-controls="flow-panel" data-flow="task" tabindex="0" type="button">任务开始</button>
+            <button id="tab-edit" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="edit" tabindex="-1" type="button">知识变更</button>
+            <button id="tab-conclude" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="conclude" tabindex="-1" type="button">稳定结论</button>
+          </div>
+          <div class="flow-body" id="flow-panel" role="tabpanel" aria-labelledby="tab-task">
+            <p class="flow-eyebrow" id="flow-eyebrow">CONTEXT IN</p>
+            <h2 id="flow-title">先定位上下文，再让 Agent 动手</h2>
+            <p id="flow-copy">项目 profile 限定检索边界，RAG 返回可核验的文件与 heading；Honcho 只补充经过确认的长期结论。</p>
+            <ol class="flow-steps" id="flow-steps">
+              <li><span>01</span>Project scope</li><li><span>02</span>Hybrid retrieval</li><li><span>03</span>Source packet</li><li><span>04</span>Agent review</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="proof-strip" aria-label="核心工程能力">
+        <div><strong>Hybrid</strong><span>Dense + BM25 + RRF + Rerank</span></div>
+        <div><strong>Incremental</strong><span>哈希同步、删除检测与原子替换</span></div>
+        <div><strong>Auditable</strong><span>一致性审计与本地事件</span></div>
+        <div><strong>Replaceable</strong><span>记忆与 Trace 均可替换</span></div>
+      </section>
+
+      <section class="section-shell section-block" id="architecture">
+        <div class="section-heading"><p class="kicker">SYSTEM BOUNDARY</p><h2>三个稳定契约，避免绑定某个 Agent 或云平台</h2><p>项目配置决定知识边界，CLI / JSON 负责 Agent 调用，本地事件模型隔离可观测服务。</p></div>
+        <div class="architecture-grid">
+          <article class="architecture-card accent-a"><p class="card-index">01 / PROFILE</p><h3>知识接口</h3><p>一个 <code>langhuan.toml</code> 描述目录、frontmatter、检索 scope 和非敏感运行选项。</p><ul><li>Obsidian 结构化解析</li><li>项目级检索范围</li><li>路径与配置可移植</li></ul></article>
+          <article class="architecture-card accent-b"><p class="card-index">02 / CONTEXT</p><h3>Agent 接口</h3><p>Codex、Hermes 或其他 Agent 通过命令行获取带来源的上下文，并在正式编辑后显式同步。</p><ul><li>稳定 CLI / JSON</li><li>来源与 heading 可核验</li><li>Agent 失败不损坏知识库</li></ul></article>
+          <article class="architecture-card accent-c"><p class="card-index">03 / EVENTS</p><h3>运行接口</h3><p>JSONL 是本地运行事实源；Honcho、AgentLoop 和 Langfuse 都位于可选集成层。</p><ul><li>云端故障软失败</li><li>正文采集默认关闭</li><li>集成逻辑与检索分离</li></ul></article>
+        </div>
+      </section>
+
+      <section class="section-shell section-block" id="evidence">
+        <div class="section-heading split-heading"><div><p class="kicker">ENGINEERING EVIDENCE</p><h2>展示可验证的工程闭环，不堆功能名词</h2></div><p>生产案例已在数千级 chunk 的私人知识库中运行；开源 v0.1 的能力与结论只以本仓 demo-vault 和测试为准。</p></div>
+        <div class="evidence-layout">
+          <div class="capability-list">
+            <article><span>Parser</span><h3>理解 Obsidian，而不只是读取纯文本</h3><p>frontmatter、wikilink、embed、标题层级和来源上下文进入统一 chunk metadata。</p></article>
+            <article><span>Retrieval</span><h3>混合召回与重排分离</h3><p>Dense 与 BM25 经 RRF 融合，再由可选本地 Cross-Encoder 重排；默认 Hash 后端只用于离线演示和接口验证。</p></article>
+            <article><span>Reliability</span><h3>增量更新也有安全边界</h3><p>公开 v0.1 提供文件哈希、删除检测、索引原子替换与 chunk ID 审计；跨进程锁和批次恢复列入后续路线图。</p></article>
+          </div>
+          <aside class="metrics-panel"><p class="panel-label">PUBLIC BENCHMARK</p><div class="metric-placeholder"><strong>Recall@5</strong><span>待公开评测集实测</span></div><div class="metric-placeholder"><strong>p50 / p95</strong><span>待固定环境实测</span></div><div class="metric-placeholder"><strong>Core tests</strong><span>解析 / 增量 / 删除 / 隐私</span></div><p class="metrics-note">不使用模型估计值。指标将由仓库内评测脚本生成并附环境说明。</p></aside>
+        </div>
+      </section>
+
+      <section class="quickstart section-shell section-block" id="quickstart">
+        <div class="quickstart-copy"><p class="kicker">FIVE-MINUTE PATH</p><h2>先跑通离线 demo，再决定是否启用模型与云端集成</h2><p>首次体验不要求 Docker、Honcho、AgentLoop、Langfuse 或任何云账号。生产模型下载也由显式命令触发。</p><div class="route-tags"><span>01 Demo</span><span>02 Init</span><span>03 Doctor</span><span>04 Index</span><span>05 Ask</span></div></div>
+        <div class="code-window"><div class="code-toolbar"><span>PowerShell / Bash</span><button id="copy-quickstart" type="button">复制</button></div><pre><code id="quickstart-code">git clone https://github.com/Farprt/langhuan-agentic-knowledge-system.git
+cd langhuan-agentic-knowledge-system
+python -m pip install -e .
+langhuan demo
+langhuan init --vault ./examples/demo-vault
+langhuan doctor
+langhuan index
+langhuan ask "这个项目如何处理增量索引失败？"</code></pre><p class="copy-status" id="copy-status" aria-live="polite"></p></div>
+      </section>
+
+      <section class="section-shell section-block" id="privacy">
+        <div class="section-heading"><p class="kicker">PRIVACY BY DEFAULT</p><h2>本地优先不是口号，而是故障边界</h2></div>
+        <div class="boundary-grid">
+          <article><span class="boundary-state local">DEFAULT</span><h3>始终留在本地</h3><p>原始 Markdown、本地索引、模型缓存、JSONL 事件和所有凭据。</p></article>
+          <article><span class="boundary-state optional">OPT-IN</span><h3>可选外部能力</h3><p>Honcho 稳定记忆、AgentLoop / Langfuse Trace。正文和本机路径默认不进入导出载荷。</p></article>
+          <article><span class="boundary-state blocked">NEVER</span><h3>不进入 Git</h3><p>私有知识、真实日志、数据库、pickle、DPAPI 密文、租户标识、API Key 与供应商二进制。</p></article>
+        </div>
+      </section>
+
+      <section class="ownership section-shell section-block">
+        <div><p class="kicker">BUILD VS. INTEGRATE</p><h2>明确哪些是自研，哪些是系统集成</h2></div>
+        <div class="ownership-columns"><div><span>BUILT</span><p>Obsidian parser、heading-aware chunking、混合检索编排、增量同步、一致性审计、事件模型与安全边界。</p></div><div><span>ADAPTER BOUNDARY</span><p>SentenceTransformers / BGE 与 Cross-Encoder 可从本地路径加载；Honcho、AgentLoop 与 Langfuse 目前只提供去敏边界和配置模板。</p></div></div>
+      </section>
+
+      <footer><div><span class="brand-mark">琅</span><strong>Langhuan</strong></div><p>Public reference vault + reusable engine + private production case.</p><a href="https://github.com/Farprt/langhuan-agentic-knowledge-system">查看源码 ↗</a></footer>
+    </main>
+  </body>
+</html>
