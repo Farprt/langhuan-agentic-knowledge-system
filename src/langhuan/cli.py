@@ -9,6 +9,22 @@ from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .catalog import (
+    CATALOG_VERSION,
+    catalog_inventory,
+    catalog_status,
+    catalog_context,
+    evaluate_agent_cases,
+    evaluate_catalog,
+    ensure_note_id,
+    find_catalog_page,
+    resolve_catalog,
+    render_evaluation_markdown,
+    route_catalog_context,
+    sync_catalog,
+    task_envelope,
+    validate_catalog,
+)
 from .config import ConfigError, find_config, load_config, render_config
 from .events import log_event
 from .index import audit_index, load_index, sync_index
@@ -42,8 +58,14 @@ area: Knowledge Engineering
 }
 
 
-def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True)
+def _json(data: object, *, compact: bool = False) -> str:
+    return json.dumps(
+        data,
+        ensure_ascii=False,
+        indent=None if compact else 2,
+        separators=(",", ":") if compact else None,
+        sort_keys=True,
+    )
 
 
 def _write_config(path: Path, vault: Path, force: bool) -> None:
@@ -87,7 +109,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             }
         )
         if settings.index_path.is_file():
-            checks["index_audit"] = audit_index(load_index(settings))
+            checks["index_audit"] = audit_index(load_index(settings), settings)
     except ConfigError as exc:
         checks.update({"config_valid": False, "error": str(exc)})
     healthy = bool(
@@ -164,6 +186,182 @@ def cmd_demo(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_catalog_sync(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    _catalog, summary = sync_catalog(
+        settings, verify=args.verify, dry_run=args.dry_run
+    )
+    print(_json(summary, compact=args.compact))
+    return 0
+
+
+def cmd_catalog_find(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    if args.collection and args.collection not in settings.catalog.collections:
+        available = ", ".join(settings.catalog.collections) or "none"
+        raise ValueError(
+            f"Unknown catalog collection {args.collection!r}. Available: {available}"
+        )
+    catalog, sync = sync_catalog(settings)
+    page = find_catalog_page(
+        catalog,
+        args.query,
+        collection=args.collection,
+        under=args.under,
+        note_type=args.type,
+        limit=args.limit,
+        mode=args.mode,
+    )
+    print(
+        _json(
+            {
+                "version": CATALOG_VERSION,
+                "revision": catalog["revision"],
+                "catalog_revision": catalog["revision"],
+                "content_digest": catalog["content_digest"],
+                "sync": sync,
+                **page,
+            },
+            compact=args.compact,
+        )
+    )
+    return 0
+
+
+def cmd_catalog_context(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    scopes = [bool(args.query), bool(args.path), bool(args.collection), args.global_view]
+    if sum(scopes) != 1:
+        raise ValueError("context requires exactly one of --query, --path, --collection or --global")
+    catalog, _sync = sync_catalog(settings)
+    result = catalog_context(
+        settings,
+        catalog,
+        query=args.query,
+        path=args.path,
+        collection=args.collection,
+        global_view=args.global_view,
+        limit=args.limit,
+    )
+    if args.route or args.char_budget is not None:
+        result = route_catalog_context(
+            result,
+            char_budget=args.char_budget or 6000,
+        )
+    print(_json(result, compact=args.compact))
+    return 0
+
+
+def cmd_catalog_list(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, _sync = sync_catalog(settings)
+    print(_json(catalog_inventory(catalog), compact=args.compact))
+    return 0
+
+
+def cmd_catalog_envelope(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, _sync = sync_catalog(settings)
+    result = task_envelope(
+        settings,
+        catalog,
+        path=args.path,
+        note_id=args.id,
+        workflow=args.workflow,
+        action=args.action,
+        char_budget=args.char_budget,
+    )
+    print(_json(result, compact=args.compact))
+    return 0 if result["status"] == "ready" else 1
+
+
+def cmd_catalog_status(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, _sync = sync_catalog(settings, verify=True)
+    result = catalog_status(settings, catalog, verbose=args.verbose)
+    print(_json(result, compact=args.compact))
+    return 0 if result["status"] == "ready" else 1
+
+
+def cmd_catalog_resolve(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, _sync = sync_catalog(settings)
+    result = resolve_catalog(catalog, note_id=args.id, path=args.path)
+    print(_json(result, compact=args.compact))
+    return 0 if result["status"] == "unique" else 1
+
+
+def cmd_catalog_validate(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, sync = sync_catalog(settings, verify=True)
+    result = validate_catalog(settings, catalog, strict=args.strict)
+    result["sync"] = sync
+    print(_json(result, compact=args.compact))
+    return 0 if result["valid"] else 1
+
+
+def cmd_catalog_evaluate(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, sync = sync_catalog(settings, verify=True)
+    result = evaluate_catalog(settings, catalog, strict=args.strict)
+    result["sync"] = sync
+    if args.report:
+        report_path = Path(args.report).expanduser().resolve()
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(render_evaluation_markdown(result), encoding="utf-8")
+        result["report"] = args.report
+    print(_json(result, compact=args.compact))
+    return 0 if result["valid"] else 1
+
+
+def cmd_catalog_evaluate_agent(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    catalog, sync = sync_catalog(settings, verify=True)
+    cases = json.loads(Path(args.cases).expanduser().read_text(encoding="utf-8"))
+    submissions = [
+        json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+        for path in args.submission
+    ]
+    result = evaluate_agent_cases(settings, catalog, cases, submissions)
+    result["sync"] = sync
+    if args.report:
+        report_path = Path(args.report).expanduser().resolve()
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(_json(result), encoding="utf-8")
+        result["report"] = args.report
+    print(_json(result, compact=args.compact))
+    return 0 if result["valid"] else 1
+
+
+def cmd_catalog_ensure_id(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    if args.path and args.path_option:
+        raise ValueError("Use either the positional path or --path, not both")
+    target_path = args.path_option or args.path
+    if not target_path:
+        raise ValueError("A Markdown path is required")
+    result = ensure_note_id(settings, target_path)
+    catalog, sync = sync_catalog(settings, verify=True)
+    if catalog.get("identity_index", {}).get(result["id"]) != result["path"]:
+        raise RuntimeError(
+            "The assigned note ID is missing or duplicated in the refreshed catalog"
+        )
+    print(
+        _json(
+            {
+                "version": CATALOG_VERSION,
+                "revision": catalog["revision"],
+                "catalog_revision": catalog["revision"],
+                "content_digest": catalog["content_digest"],
+                "sync": sync,
+                **result,
+            },
+            compact=args.compact,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="langhuan", description="Local-first Obsidian RAG.")
     parser.add_argument("--version", action="version", version=__version__)
@@ -198,6 +396,151 @@ def build_parser() -> argparse.ArgumentParser:
 
     demo = commands.add_parser("demo", help="Run a self-contained offline smoke test.")
     demo.set_defaults(function=cmd_demo)
+
+    catalog = commands.add_parser(
+        "catalog", help="Inspect the live vault structure without reading note bodies into output."
+    )
+    catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
+
+    catalog_sync = catalog_commands.add_parser(
+        "sync", help="Incrementally synchronize structural metadata."
+    )
+    catalog_sync.add_argument("--config", default=None)
+    catalog_sync.add_argument("--verify", action="store_true")
+    catalog_sync.add_argument("--dry-run", action="store_true")
+    catalog_sync.add_argument("--compact", action="store_true")
+    catalog_sync.set_defaults(function=cmd_catalog_sync)
+
+    catalog_find = catalog_commands.add_parser(
+        "find", help="Find files by relative path, stem, title or alias."
+    )
+    catalog_find.add_argument("query")
+    catalog_find.add_argument("--config", default=None)
+    catalog_find.add_argument("--collection", default=None)
+    catalog_find.add_argument("--under", default=None)
+    catalog_find.add_argument("--type", default=None)
+    catalog_find.add_argument("--limit", type=int, default=20)
+    catalog_find.add_argument(
+        "--mode", choices=("broad", "exact"), default="broad"
+    )
+    catalog_find.add_argument("--compact", action="store_true")
+    catalog_find.set_defaults(function=cmd_catalog_find)
+
+    catalog_resolve = catalog_commands.add_parser(
+        "resolve", help="Resolve one current note by stable ID or exact relative path."
+    )
+    catalog_resolve.add_argument("--id", default=None)
+    catalog_resolve.add_argument("--path", default=None)
+    catalog_resolve.add_argument("--config", default=None)
+    catalog_resolve.add_argument("--compact", action="store_true")
+    catalog_resolve.set_defaults(function=cmd_catalog_resolve)
+
+    catalog_status_parser = catalog_commands.add_parser(
+        "status", help="Return compact Catalog and Reading Ledger health."
+    )
+    catalog_status_parser.add_argument("--config", default=None)
+    catalog_status_parser.add_argument("--verbose", action="store_true")
+    catalog_status_parser.add_argument("--compact", action="store_true")
+    catalog_status_parser.set_defaults(function=cmd_catalog_status)
+
+    catalog_list = catalog_commands.add_parser(
+        "list", help="Explicitly return the complete cataloged relative-path inventory."
+    )
+    catalog_list.add_argument("--all", action="store_true", required=True)
+    catalog_list.add_argument("--config", default=None)
+    catalog_list.add_argument("--compact", action="store_true")
+    catalog_list.set_defaults(function=cmd_catalog_list)
+
+    catalog_context_parser = catalog_commands.add_parser(
+        "context", help="Build a bounded structural context capsule for an agent."
+    )
+    catalog_context_parser.add_argument(
+        "--query", default=None, help="Lexically locate candidates by name or identifier."
+    )
+    catalog_context_parser.add_argument("--config", default=None)
+    catalog_context_parser.add_argument("--path", default=None)
+    catalog_context_parser.add_argument("--collection", default=None)
+    catalog_context_parser.add_argument(
+        "--global",
+        dest="global_view",
+        action="store_true",
+        help="Explicitly return the complete Collection Registry overview.",
+    )
+    catalog_context_parser.add_argument("--limit", type=int, default=12)
+    catalog_context_parser.add_argument(
+        "--route",
+        action="store_true",
+        help="Return the deterministic task-routing capsule instead of the full context view.",
+    )
+    catalog_context_parser.add_argument(
+        "--char-budget",
+        type=int,
+        default=None,
+        help="Bound the route capsule by compact JSON characters; implies --route.",
+    )
+    catalog_context_parser.add_argument("--compact", action="store_true")
+    catalog_context_parser.set_defaults(function=cmd_catalog_context)
+
+    catalog_envelope = catalog_commands.add_parser(
+        "envelope",
+        help="Build the deterministic task contract for one target note.",
+    )
+    catalog_envelope.add_argument("--path", default=None)
+    catalog_envelope.add_argument("--id", default=None)
+    catalog_envelope.add_argument(
+        "--workflow",
+        choices=("auto", "process-input", "update-note", "update-project"),
+        default="auto",
+    )
+    catalog_envelope.add_argument(
+        "--action",
+        choices=("read", "create", "update", "move", "delete"),
+        default="update",
+    )
+    catalog_envelope.add_argument("--char-budget", type=int, default=2000)
+    catalog_envelope.add_argument("--config", default=None)
+    catalog_envelope.add_argument("--compact", action="store_true")
+    catalog_envelope.set_defaults(function=cmd_catalog_envelope)
+
+    catalog_validate = catalog_commands.add_parser(
+        "validate", help="Verify catalog, registry, wikilinks and the optional reading ledger."
+    )
+    catalog_validate.add_argument("--config", default=None)
+    catalog_validate.add_argument("--strict", action="store_true")
+    catalog_validate.add_argument("--compact", action="store_true")
+    catalog_validate.set_defaults(function=cmd_catalog_validate)
+
+    catalog_evaluate = catalog_commands.add_parser(
+        "evaluate",
+        help="Run body-free structural regression checks derived from explicit vault facts.",
+    )
+    catalog_evaluate.add_argument("--config", default=None)
+    catalog_evaluate.add_argument("--strict", action="store_true")
+    catalog_evaluate.add_argument(
+        "--report", default=None, help="Optionally write a Markdown scorecard."
+    )
+    catalog_evaluate.add_argument("--compact", action="store_true")
+    catalog_evaluate.set_defaults(function=cmd_catalog_evaluate)
+
+    catalog_evaluate_agent = catalog_commands.add_parser(
+        "evaluate-agent",
+        help="Validate explicit agent cases and score evidence-only submissions.",
+    )
+    catalog_evaluate_agent.add_argument("--cases", required=True)
+    catalog_evaluate_agent.add_argument("--submission", action="append", default=[])
+    catalog_evaluate_agent.add_argument("--config", default=None)
+    catalog_evaluate_agent.add_argument("--report", default=None)
+    catalog_evaluate_agent.add_argument("--compact", action="store_true")
+    catalog_evaluate_agent.set_defaults(function=cmd_catalog_evaluate_agent)
+
+    catalog_ensure_id = catalog_commands.add_parser(
+        "ensure-id", help="Assign a stable frontmatter ID to one existing Markdown note."
+    )
+    catalog_ensure_id.add_argument("path", nargs="?", default=None)
+    catalog_ensure_id.add_argument("--path", dest="path_option", default=None)
+    catalog_ensure_id.add_argument("--config", default=None)
+    catalog_ensure_id.add_argument("--compact", action="store_true")
+    catalog_ensure_id.set_defaults(function=cmd_catalog_ensure_id)
     return parser
 
 

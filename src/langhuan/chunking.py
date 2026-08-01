@@ -6,6 +6,9 @@ from typing import Any
 from .reader import ObsidianDocument
 
 
+CHUNKER_VERSION = "heading-aware/v2"
+
+
 @dataclass(frozen=True)
 class Chunk:
     text: str

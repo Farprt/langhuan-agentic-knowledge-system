@@ -1,14 +1,56 @@
 from __future__ import annotations
 
 import os
+import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 
 class ConfigError(ValueError):
     """Raised when langhuan.toml is missing or invalid."""
+
+
+DEFAULT_CATALOG_FIELDS = (
+    "type",
+    "status",
+    "area",
+    "subarea",
+    "source_type",
+    "book",
+    "project",
+    "year",
+    "start_year",
+    "end_year",
+    "processing_unit",
+    "processing_status",
+    "official_note",
+)
+
+
+@dataclass(frozen=True)
+class CatalogCollection:
+    name: str
+    paths: tuple[str, ...]
+    role: str
+    usage: str = ""
+    workflow: str = ""
+    processor: str = ""
+    entrypoints: tuple[str, ...] = ()
+    related: tuple[str, ...] = ()
+    fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CatalogSettings:
+    include: tuple[str, ...] = (".",)
+    exclude: tuple[str, ...] = (".git", ".obsidian", ".langhuan")
+    identity_paths: tuple[str, ...] = ()
+    include_non_markdown: bool = False
+    metadata_fields: tuple[str, ...] = DEFAULT_CATALOG_FIELDS
+    collections: dict[str, CatalogCollection] = field(default_factory=dict)
+    reading_ledger: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -29,6 +71,7 @@ class Settings:
     log_events: bool
     include_content_in_events: bool
     scopes: dict[str, tuple[str, ...]]
+    catalog: CatalogSettings = field(default_factory=CatalogSettings)
 
     @property
     def index_path(self) -> Path:
@@ -37,6 +80,14 @@ class Settings:
     @property
     def event_log_path(self) -> Path:
         return self.data_dir / "events.jsonl"
+
+    @property
+    def catalog_path(self) -> Path:
+        return self.data_dir / "catalog.json"
+
+    @property
+    def catalog_lock_path(self) -> Path:
+        return self.data_dir / "catalog.lock"
 
 
 def _table(data: dict[str, Any], key: str) -> dict[str, Any]:
@@ -50,6 +101,34 @@ def _strings(value: Any, name: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ConfigError(f"{name} must be an array of strings")
     return tuple(item.replace("\\", "/").strip("/") for item in value if item.strip("/"))
+
+
+def _relative_strings(value: Any, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ConfigError(f"{name} must be an array of strings")
+    paths: list[str] = []
+    for raw in value:
+        item = raw.replace("\\", "/")
+        path = Path(item)
+        if (
+            path.is_absolute()
+            or item.startswith("/")
+            or re.match(r"^[A-Za-z]:", item)
+            or ".." in path.parts
+        ):
+            raise ConfigError(f"{name} entries must be relative and stay inside the vault")
+        cleaned = item.strip("/")
+        if cleaned:
+            paths.append(cleaned)
+    return tuple(paths)
+
+
+def _string(value: Any, name: str, *, default: str = "") -> str:
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ConfigError(f"{name} must be a string")
+    return value.strip()
 
 
 def _positive_int(value: Any, name: str) -> int:
@@ -72,11 +151,19 @@ def _path(value: Any, base: Path, name: str) -> Path:
 
 
 def find_config(path: str | Path | None = None) -> Path:
-    candidate = path or os.environ.get("LANGHUAN_CONFIG") or "langhuan.toml"
-    resolved = Path(candidate).expanduser().resolve()
-    if not resolved.is_file():
+    explicit = path or os.environ.get("LANGHUAN_CONFIG")
+    if explicit:
+        resolved = Path(explicit).expanduser().resolve()
+        if resolved.is_file():
+            return resolved
         raise ConfigError(f"Configuration not found: {resolved}. Run `langhuan init --vault PATH`.")
-    return resolved
+    for directory in (Path.cwd(), *Path.cwd().parents):
+        candidate = directory / "langhuan.toml"
+        if candidate.is_file():
+            return candidate.resolve()
+    raise ConfigError(
+        f"Configuration not found from {Path.cwd()}. Run `langhuan init --vault PATH`."
+    )
 
 
 def load_config(path: str | Path | None = None) -> Settings:
@@ -92,6 +179,8 @@ def load_config(path: str | Path | None = None) -> Settings:
     retrieval = _table(data, "retrieval")
     observability = _table(data, "observability")
     raw_scopes = _table(data, "scopes")
+    raw_catalog = _table(data, "catalog")
+    raw_collections = _table(raw_catalog, "collections")
 
     include = _strings(vault.get("include", ["."]), "vault.include")
     if not include:
@@ -118,9 +207,119 @@ def load_config(path: str | Path | None = None) -> Settings:
     if not embedding_model:
         raise ConfigError("retrieval.embedding_model cannot be empty")
 
+    vault_path = _path(vault.get("path"), base, "vault.path")
+    catalog_include = _relative_strings(
+        raw_catalog.get("include", ["."]), "catalog.include"
+    )
+    if not catalog_include:
+        raise ConfigError("catalog.include cannot be empty; use an explicit path or ['.']")
+    catalog_exclude = _relative_strings(
+        raw_catalog.get("exclude", [".git", ".obsidian", ".langhuan"]),
+        "catalog.exclude",
+    )
+    identity_paths = _relative_strings(
+        raw_catalog.get("identity_paths", []), "catalog.identity_paths"
+    )
+    metadata_fields = _strings(
+        raw_catalog.get("metadata_fields", list(DEFAULT_CATALOG_FIELDS)),
+        "catalog.metadata_fields",
+    )
+    collections: dict[str, CatalogCollection] = {}
+    for name, raw_collection in raw_collections.items():
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", name):
+            raise ConfigError(
+                f"catalog collection {name!r} must use letters, digits, underscores or hyphens"
+            )
+        if not isinstance(raw_collection, dict):
+            raise ConfigError(f"catalog.collections.{name} must be a TOML table")
+        paths = _relative_strings(
+            raw_collection.get("paths", []), f"catalog.collections.{name}.paths"
+        )
+        if not paths:
+            raise ConfigError(f"catalog.collections.{name}.paths cannot be empty")
+        role = _string(
+            raw_collection.get("role"), f"catalog.collections.{name}.role"
+        )
+        if not role:
+            raise ConfigError(f"catalog.collections.{name}.role cannot be empty")
+        collections[name] = CatalogCollection(
+            name=name,
+            paths=paths,
+            role=role,
+            usage=_string(
+                raw_collection.get("usage"),
+                f"catalog.collections.{name}.usage",
+            ),
+            workflow=_string(
+                raw_collection.get("workflow"),
+                f"catalog.collections.{name}.workflow",
+            ),
+            processor=_string(
+                raw_collection.get("processor"),
+                f"catalog.collections.{name}.processor",
+            ),
+            entrypoints=_relative_strings(
+                raw_collection.get("entrypoints", []),
+                f"catalog.collections.{name}.entrypoints",
+            ),
+            related=_strings(
+                raw_collection.get("related", []),
+                f"catalog.collections.{name}.related",
+            ),
+            fields=_strings(
+                raw_collection.get("fields", []),
+                f"catalog.collections.{name}.fields",
+            ),
+        )
+        if collections[name].workflow not in {
+            "",
+            "process-input",
+            "update-note",
+            "update-project",
+        }:
+            raise ConfigError(
+                f"catalog.collections.{name}.workflow must be process-input, "
+                "update-note or update-project"
+            )
+        if collections[name].processor and not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]*", collections[name].processor
+        ):
+            raise ConfigError(
+                f"catalog.collections.{name}.processor must use letters, digits, "
+                "underscores or hyphens"
+            )
+    for collection in collections.values():
+        unknown = sorted(set(collection.related) - set(collections))
+        if unknown:
+            raise ConfigError(
+                f"catalog.collections.{collection.name}.related contains unknown collections: "
+                + ", ".join(unknown)
+            )
+
+    reading_ledger: Path | None = None
+    raw_ledger = raw_catalog.get("reading_ledger")
+    if raw_ledger is not None:
+        ledger_text = _string(raw_ledger, "catalog.reading_ledger")
+        if not ledger_text:
+            raise ConfigError("catalog.reading_ledger cannot be empty")
+        ledger_normalized = ledger_text.replace("\\", "/")
+        ledger_relative = Path(ledger_normalized)
+        if (
+            ledger_relative.is_absolute()
+            or ledger_normalized.startswith("/")
+            or re.match(r"^[A-Za-z]:", ledger_normalized)
+            or ".." in ledger_relative.parts
+        ):
+            raise ConfigError("catalog.reading_ledger must be a relative path inside the vault")
+        reading_ledger = (vault_path / ledger_relative).resolve()
+        try:
+            reading_ledger.relative_to(vault_path)
+        except ValueError as exc:
+            raise ConfigError("catalog.reading_ledger must stay inside the vault") from exc
+
     return Settings(
         config_path=config_path,
-        vault=_path(vault.get("path"), base, "vault.path"),
+        vault=vault_path,
         data_dir=_path(index.get("data_dir", ".langhuan"), base, "index.data_dir"),
         include=include,
         exclude=exclude,
@@ -141,6 +340,18 @@ def load_config(path: str | Path | None = None) -> Settings:
             observability.get("include_content", False), "observability.include_content"
         ),
         scopes=scopes,
+        catalog=CatalogSettings(
+            include=catalog_include,
+            exclude=catalog_exclude,
+            identity_paths=identity_paths,
+            include_non_markdown=_boolean(
+                raw_catalog.get("include_non_markdown", False),
+                "catalog.include_non_markdown",
+            ),
+            metadata_fields=metadata_fields,
+            collections=collections,
+            reading_ledger=reading_ledger,
+        ),
     )
 
 
@@ -156,6 +367,30 @@ exclude = [".git", ".obsidian", ".langhuan", "Assets", "Inbox/Processing"]
 data_dir = ".langhuan"
 chunk_size = 1200
 chunk_overlap = 150
+
+[catalog]
+include = ["."]
+exclude = [".git", ".obsidian", ".langhuan"]
+identity_paths = ["Sources", "Concepts", "People", "Events", "Time", "Maps", "Areas", "Projects"]
+include_non_markdown = false
+metadata_fields = ["type", "status", "area", "subarea", "source_type", "book", "project", "year", "start_year", "end_year", "processing_unit", "processing_status", "official_note"]
+
+[catalog.collections.sources]
+paths = ["Sources"]
+role = "Curated source notes with traceable provenance."
+usage = "Check before promoting Inbox material or creating reusable knowledge."
+workflow = "update-note"
+entrypoints = []
+related = ["projects"]
+
+[catalog.collections.projects]
+paths = ["Projects"]
+role = "Active outcomes, decisions and implementation evidence."
+usage = "Use for task-local context; promote reusable knowledge elsewhere."
+workflow = "update-note"
+processor = "project-note"
+entrypoints = []
+related = ["sources"]
 
 [retrieval]
 embedding_model = "hash"

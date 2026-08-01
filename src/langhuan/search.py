@@ -7,7 +7,7 @@ from typing import Any
 
 from .config import Settings
 from .embeddings import cosine, make_embedder, tokenize
-from .index import audit_index, config_fingerprint, load_index
+from .index import audit_index, load_index
 
 
 def _under_prefix(path: str, prefix: str) -> bool:
@@ -68,11 +68,9 @@ def search(
     if not query.strip():
         raise ValueError("Query cannot be empty")
     index = load_index(settings)
-    audit = audit_index(index)
-    if not audit["consistent"] or not index["chunks"]:
-        raise RuntimeError("Index is empty or inconsistent. Run `langhuan index` first.")
-    if index.get("fingerprint") != config_fingerprint(settings):
-        raise RuntimeError("Index configuration changed. Run `langhuan sync` before querying.")
+    audit = audit_index(index, settings)
+    if not audit["ready"] or not index.get("chunks"):
+        raise RuntimeError("Index is empty, stale, or inconsistent. Run `langhuan sync` first.")
 
     prefixes: tuple[str, ...] = ()
     if scope:

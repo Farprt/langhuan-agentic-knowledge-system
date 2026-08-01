@@ -10,6 +10,7 @@ from typing import Any
 FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
 OBSIDIAN_LINK_RE = re.compile(r"(!)?\[\[([^\]]+)\]\]")
 WIKILINK_RE = re.compile(r"^\[\[(.+?)\]\]$")
+PARSER_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class ObsidianDocument:
 
 
 def normalize_path(path: Path | str) -> str:
-    return Path(path).as_posix().lstrip("./")
+    return Path(path).as_posix().removeprefix("./")
 
 
 def _clean_wikilink(value: str) -> str:
@@ -92,13 +93,62 @@ def _split_link(inner: str) -> dict[str, str]:
 def extract_links(body: str) -> tuple[str, list[dict[str, str]], list[dict[str, str]]]:
     outlinks: list[dict[str, str]] = []
     embeds: list[dict[str, str]] = []
+    in_comment = False
+    fence: tuple[str, int] | None = None
 
     def replace(match: re.Match[str]) -> str:
         link = _split_link(match.group(2))
         (embeds if match.group(1) else outlinks).append(link)
         return link["display"]
 
-    return OBSIDIAN_LINK_RE.sub(replace, body), outlinks, embeds
+    def replace_visible(line: str) -> str:
+        nonlocal in_comment
+        pieces: list[str] = []
+        cursor = 0
+        while cursor < len(line):
+            if in_comment:
+                end = line.find("-->", cursor)
+                if end < 0:
+                    pieces.append(line[cursor:])
+                    break
+                pieces.append(line[cursor : end + 3])
+                cursor = end + 3
+                in_comment = False
+                continue
+            start = line.find("<!--", cursor)
+            if start < 0:
+                pieces.append(OBSIDIAN_LINK_RE.sub(replace, line[cursor:]))
+                break
+            pieces.append(OBSIDIAN_LINK_RE.sub(replace, line[cursor:start]))
+            pieces.append("<!--")
+            cursor = start + 4
+            in_comment = True
+        return "".join(pieces)
+
+    rendered: list[str] = []
+    for line in body.splitlines(keepends=True):
+        candidate: tuple[str, int, str] | None = None
+        if not in_comment:
+            match = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+            if match:
+                run, tail = match.groups()
+                candidate = (run[0], len(run), tail)
+        if fence:
+            rendered.append(line)
+            if (
+                candidate
+                and candidate[0] == fence[0]
+                and candidate[1] >= fence[1]
+                and not candidate[2].strip()
+            ):
+                fence = None
+            continue
+        if candidate and not (candidate[0] == "`" and "`" in candidate[2]):
+            fence = (candidate[0], candidate[1])
+            rendered.append(line)
+            continue
+        rendered.append(replace_visible(line))
+    return "".join(rendered), outlinks, embeds
 
 
 def _frontmatter_text(frontmatter: dict[str, Any], key: str) -> str:

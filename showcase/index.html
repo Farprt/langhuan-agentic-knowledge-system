@@ -85,15 +85,19 @@
       </section>
 
       <section class="quickstart section-shell section-block" id="quickstart">
-        <div class="quickstart-copy"><p class="kicker">FIVE-MINUTE PATH</p><h2>先跑通离线 demo，再决定是否启用模型与云端集成</h2><p>首次体验不要求 Docker、Honcho、AgentLoop、Langfuse 或任何云账号。生产模型下载也由显式命令触发。</p><div class="route-tags"><span>01 Demo</span><span>02 Init</span><span>03 Doctor</span><span>04 Index</span><span>05 Ask</span></div></div>
-        <div class="code-window"><div class="code-toolbar"><span>PowerShell / Bash</span><button id="copy-quickstart" type="button">复制</button></div><pre><code id="quickstart-code">git clone https://github.com/Farprt/langhuan-agentic-knowledge-system.git
-cd langhuan-agentic-knowledge-system
-python -m pip install -e .
-langhuan demo
-langhuan init --vault ./examples/demo-vault
-langhuan doctor
-langhuan index
-langhuan ask "这个项目如何处理增量索引失败？"</code></pre><p class="copy-status" id="copy-status" aria-live="polite"></p></div>
+        <div class="quickstart-copy"><p class="kicker">FIVE-MINUTE PATH</p>
+          <h2>先跑通离线 demo，再决定是否启用模型与云端集成</h2>
+          <p>首次体验不要求 Docker、Honcho、AgentLoop、Langfuse 或任何云账号。生产模型下载也由显式命令触发。</p>
+          <div class="route-tags"><span>01 Demo</span><span>02 Init</span><span>03 Doctor</span><span>04 Index</span><span>05 Ask</span></div></div>
+          <div class="code-window"><div class="code-toolbar"><span>PowerShell / Bash</span><button id="copy-quickstart" type="button">复制</button></div><pre><code id="quickstart-code">
+            git clone https://github.com/Farprt/langhuan-agentic-knowledge-system.git
+            cd langhuan-agentic-knowledge-system
+            python -m pip install -e .
+            langhuan demo
+            langhuan init --vault ./examples/demo-vault
+            langhuan doctor
+            langhuan index
+            langhuan ask "这个项目如何处理增量索引失败？"</code></pre><p class="copy-status" id="copy-status" aria-live="polite"></p></div>
       </section>
 
       <section class="section-shell section-block" id="privacy">

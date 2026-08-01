@@ -8,6 +8,7 @@ from typing import Protocol
 
 
 TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+|[\u4e00-\u9fff]")
+TOKENIZER_VERSION = "mixed-word-cjk-bigram/v1"
 
 
 def tokenize(text: str) -> list[str]:

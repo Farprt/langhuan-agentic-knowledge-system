@@ -7,8 +7,8 @@ from pathlib import Path
 
 from langhuan.config import ConfigError, load_config, render_config
 from langhuan.events import log_event
-from langhuan.index import sync_index
-from langhuan.reader import extract_links, parse_frontmatter
+from langhuan.index import audit_index, load_index, sync_index
+from langhuan.reader import extract_links, normalize_path, parse_frontmatter
 from langhuan.search import search
 
 
@@ -44,6 +44,22 @@ Local JSONL events do not include query content by default.
         self.assertIn("the index", vector_text)
         self.assertEqual(embeds, [])
 
+    def test_structural_links_ignore_fences_comments_and_keep_dotfiles(self) -> None:
+        body = """See [[Real Link]].
+```text
+[[Code Example]]
+```
+<!-- [[Comment Example]] -->
+````
+[[Inside Four Backticks]]
+```
+[[Still Inside Four Backticks]]
+````
+"""
+        _vector_text, links, _embeds = extract_links(body)
+        self.assertEqual([link["target"] for link in links], ["Real Link"])
+        self.assertEqual(normalize_path(".hidden.md"), ".hidden.md")
+
     def test_incremental_hybrid_search(self) -> None:
         first = sync_index(self.settings)
         second = sync_index(self.settings)
@@ -51,7 +67,31 @@ Local JSONL events do not include query content by default.
         self.assertEqual(first["changed"], 1)
         self.assertEqual(second["changed"], 0)
         self.assertTrue(first["audit"]["consistent"])
+        self.assertTrue(first["audit"]["fresh"])
+        self.assertTrue(first["audit"]["ready"])
         self.assertEqual(results[0]["metadata"]["relative_path"], "Projects/RAG.md")
+
+    def test_reader_revision_rebuilds_a_pre_revision_index(self) -> None:
+        sync_index(self.settings)
+        index = json.loads(self.settings.index_path.read_text(encoding="utf-8"))
+        index["version"] = 1
+        index.pop("pipeline_fingerprint", None)
+        index.pop("indexed_input_digest", None)
+        self.settings.index_path.write_text(json.dumps(index), encoding="utf-8")
+
+        summary = sync_index(self.settings)
+        self.assertTrue(summary["reset"])
+        self.assertEqual(summary["changed"], 1)
+
+    def test_body_change_is_detected_as_stale_before_sync(self) -> None:
+        sync_index(self.settings)
+        path = self.vault / "Projects" / "RAG.md"
+        path.write_text(path.read_text(encoding="utf-8") + "\nNew fact.\n", encoding="utf-8")
+        audit = audit_index(load_index(self.settings), self.settings)
+        self.assertTrue(audit["storage_consistent"])
+        self.assertFalse(audit["fresh"])
+        self.assertFalse(audit["ready"])
+        self.assertNotEqual(audit["indexed_input_digest"], audit["target_input_digest"])
 
     def test_deleted_file_removes_its_chunks(self) -> None:
         first = sync_index(self.settings)

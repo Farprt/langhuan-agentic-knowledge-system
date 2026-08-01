@@ -8,6 +8,43 @@ data_dir = ".langhuan"
 chunk_size = 1200
 chunk_overlap = 150
 
+[catalog]
+include = ["."]
+exclude = [".git", ".obsidian", ".langhuan"]
+include_non_markdown = false
+identity_paths = ["Sources", "Concepts", "Maps", "Areas", "Projects"]
+metadata_fields = ["id", "type", "status", "area", "subarea", "source_type", "book", "project", "year", "start_year", "end_year", "processing_unit", "processing_status", "official_note"]
+# reading_ledger = "System/Indexes/reading-ledger.json"
+
+[catalog.collections.home]
+paths = ["Home"]
+role = "Stable entrypoints for people and agents."
+usage = "Start here when the target area or project is not yet known."
+workflow = "update-note"
+
+[catalog.collections.sources]
+paths = ["Sources"]
+role = "Curated source notes with traceable provenance."
+usage = "Check before promoting Inbox material or creating reusable knowledge."
+workflow = "update-note"
+related = ["projects"]
+
+[catalog.collections.projects]
+paths = ["Projects"]
+role = "Active outcomes, decisions and implementation evidence."
+usage = "Use for task-local context; promote reusable knowledge elsewhere."
+workflow = "update-note"
+processor = "project-note"
+related = ["sources"]
+
+[catalog.collections.inbox]
+paths = ["Inbox"]
+role = "Unintegrated inputs and temporary processing material."
+usage = "Resolve provenance, duplicates, destination and lifecycle before integration."
+workflow = "process-input"
+processor = "input"
+related = ["sources", "projects"]
+
 [retrieval]
 embedding_model = "hash"
 reranker_model = ""
