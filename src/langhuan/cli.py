@@ -28,6 +28,14 @@ from .catalog import (
 from .config import ConfigError, find_config, load_config, render_config
 from .events import log_event
 from .index import audit_index, load_index, sync_index
+from .observability import (
+    current_trace,
+    emit_event,
+    finish_trace,
+    observability_enabled,
+    start_trace,
+)
+from .observability_export import export_events
 from .search import search
 
 
@@ -271,8 +279,104 @@ def cmd_catalog_envelope(args: argparse.Namespace) -> int:
         action=args.action,
         char_budget=args.char_budget,
     )
+    if args.no_trace or not observability_enabled():
+        result["trace"] = {"enabled": False}
+    else:
+        trace = start_trace(
+            settings.data_dir,
+            agent=args.agent,
+            session_id=args.session_id,
+            target_path=(result.get("target") or {}).get("path") or args.path,
+            workflow=result.get("workflow") or args.workflow,
+            action=result.get("action") or args.action,
+        )
+        emit_event(
+            settings.data_dir,
+            component="structural-memory",
+            operation="catalog.envelope",
+            status="ready" if result["status"] == "ready" else "error",
+            target_path=(result.get("target") or {}).get("path") or args.path,
+            attributes={
+                "workflow": result.get("workflow") or args.workflow,
+                "action": result.get("action") or args.action,
+            },
+            agent=args.agent,
+            session_id=args.session_id,
+        )
+        result["trace"] = {"enabled": True, **(trace or {})}
     print(_json(result, compact=args.compact))
     return 0 if result["status"] == "ready" else 1
+
+
+def cmd_trace_start(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    result = start_trace(
+        settings.data_dir,
+        agent=args.agent,
+        session_id=args.session_id,
+        target_path=args.path,
+        workflow=args.workflow,
+        action=args.action,
+        reuse=not args.new_run,
+    )
+    print(_json(result or {"enabled": False}, compact=args.compact))
+    return 0
+
+
+def cmd_trace_current(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    result = current_trace(
+        settings.data_dir, agent=args.agent, session_id=args.session_id
+    )
+    print(_json(result or {"status": "not_active"}, compact=args.compact))
+    return 0 if result else 1
+
+
+def cmd_trace_emit(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    attributes = json.loads(args.attributes) if args.attributes else {}
+    if not isinstance(attributes, dict):
+        raise ValueError("--attributes must be a JSON object")
+    result = emit_event(
+        settings.data_dir,
+        component=args.component,
+        operation=args.operation,
+        status=args.status,
+        duration_ms=args.duration_ms,
+        target_path=args.path,
+        attributes=attributes,
+        agent=args.agent,
+        session_id=args.session_id,
+    )
+    print(_json(result or {"enabled": False}, compact=args.compact))
+    return 0
+
+
+def cmd_trace_finish(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    result = finish_trace(
+        settings.data_dir,
+        status=args.status,
+        agent=args.agent,
+        session_id=args.session_id,
+    )
+    print(_json(result or {"status": "not_active"}, compact=args.compact))
+    return 0 if result else 1
+
+
+def cmd_trace_export(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    result = export_events(
+        settings.data_dir / "observability",
+        provider=args.provider,
+        send=args.send,
+        include_local_context=args.include_local_context,
+        batch_size=args.batch_size,
+        max_events=args.max_events,
+        timeout=args.timeout,
+    )
+    print(_json(result, compact=args.compact))
+    return 0
 
 
 def cmd_catalog_status(args: argparse.Namespace) -> int:
@@ -363,7 +467,10 @@ def cmd_catalog_ensure_id(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="langhuan", description="Local-first Obsidian RAG.")
+    parser = argparse.ArgumentParser(
+        prog="langhuan",
+        description="Local-first retrieval and task context for Obsidian and Markdown.",
+    )
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -498,6 +605,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="update",
     )
     catalog_envelope.add_argument("--char-budget", type=int, default=2000)
+    catalog_envelope.add_argument("--agent", default=None)
+    catalog_envelope.add_argument("--session-id", default=None)
+    catalog_envelope.add_argument(
+        "--no-trace", action="store_true", help="Do not create a local task trace."
+    )
     catalog_envelope.add_argument("--config", default=None)
     catalog_envelope.add_argument("--compact", action="store_true")
     catalog_envelope.set_defaults(function=cmd_catalog_envelope)
@@ -541,6 +653,63 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_ensure_id.add_argument("--config", default=None)
     catalog_ensure_id.add_argument("--compact", action="store_true")
     catalog_ensure_id.set_defaults(function=cmd_catalog_ensure_id)
+
+    trace = commands.add_parser(
+        "trace", help="Record and explicitly export provider-neutral task traces."
+    )
+    trace_commands = trace.add_subparsers(dest="trace_command", required=True)
+
+    trace_start = trace_commands.add_parser("start", help="Start or resume one task trace.")
+    trace_start.add_argument("--path", default=None)
+    trace_start.add_argument("--workflow", default=None)
+    trace_start.add_argument("--action", default=None)
+    trace_start.add_argument("--agent", default=None)
+    trace_start.add_argument("--session-id", default=None)
+    trace_start.add_argument("--new-run", action="store_true")
+    trace_start.add_argument("--config", default=None)
+    trace_start.add_argument("--compact", action="store_true")
+    trace_start.set_defaults(function=cmd_trace_start)
+
+    trace_current = trace_commands.add_parser("current", help="Show the active task trace.")
+    trace_current.add_argument("--agent", default=None)
+    trace_current.add_argument("--session-id", default=None)
+    trace_current.add_argument("--config", default=None)
+    trace_current.add_argument("--compact", action="store_true")
+    trace_current.set_defaults(function=cmd_trace_current)
+
+    trace_emit = trace_commands.add_parser("emit", help="Append one metadata-only trace event.")
+    trace_emit.add_argument("--component", required=True)
+    trace_emit.add_argument("--operation", required=True)
+    trace_emit.add_argument("--status", default="ok")
+    trace_emit.add_argument("--duration-ms", type=float, default=None)
+    trace_emit.add_argument("--path", default=None)
+    trace_emit.add_argument("--attributes", default=None)
+    trace_emit.add_argument("--agent", default=None)
+    trace_emit.add_argument("--session-id", default=None)
+    trace_emit.add_argument("--config", default=None)
+    trace_emit.add_argument("--compact", action="store_true")
+    trace_emit.set_defaults(function=cmd_trace_emit)
+
+    trace_finish = trace_commands.add_parser("finish", help="Finish the active task trace.")
+    trace_finish.add_argument("--status", default="ok")
+    trace_finish.add_argument("--agent", default=None)
+    trace_finish.add_argument("--session-id", default=None)
+    trace_finish.add_argument("--config", default=None)
+    trace_finish.add_argument("--compact", action="store_true")
+    trace_finish.set_defaults(function=cmd_trace_finish)
+
+    trace_export = trace_commands.add_parser(
+        "export", help="Preview or explicitly upload redacted local trace events."
+    )
+    trace_export.add_argument("--provider", choices=("agentloop", "langfuse"), required=True)
+    trace_export.add_argument("--send", action="store_true")
+    trace_export.add_argument("--include-local-context", action="store_true")
+    trace_export.add_argument("--batch-size", type=int, default=20)
+    trace_export.add_argument("--max-events", type=int, default=None)
+    trace_export.add_argument("--timeout", type=float, default=5.0)
+    trace_export.add_argument("--config", default=None)
+    trace_export.add_argument("--compact", action="store_true")
+    trace_export.set_defaults(function=cmd_trace_export)
     return parser
 
 

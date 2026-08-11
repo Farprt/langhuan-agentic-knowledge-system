@@ -1,21 +1,21 @@
 const flows = {
   task: {
-    eyebrow: "CONTEXT IN",
+    eyebrow: "准备上下文",
     title: "先定位上下文，再让 Agent 动手",
-    copy: "项目 profile 限定检索边界，RAG 返回可核验的文件与 heading；Honcho 只补充经过确认的长期结论。",
-    steps: ["Project scope", "Hybrid retrieval", "Source packet", "Agent review"],
+    copy: "配置文件限定检索目录，结构索引定位已有文件，正文检索返回带来源的相关段落；长期记忆只保存经过确认的稳定结论。",
+    steps: ["限定目录", "定位文件", "检索正文", "打开核对"],
   },
   edit: {
-    eyebrow: "KNOWLEDGE UPDATE",
+    eyebrow: "更新知识库",
     title: "文件修改后，只同步发生变化的部分",
     copy: "文件哈希定位增删改，临时文件原子替换避免半写入，并在结束时审计文件与 chunk ID 的一致性。",
-    steps: ["File hash", "Changed chunks", "Atomic replace", "Consistency audit"],
+    steps: ["文件哈希", "更新变化部分", "完整替换索引", "一致性检查"],
   },
   conclude: {
-    eyebrow: "MEMORY OUT",
-    title: "把结论写进记忆，而不是保存整段聊天",
-    copy: "只有稳定规则、环境事实和明确偏好进入记忆层。运行事件先写本地 JSONL，外部集成由独立进程显式处理。",
-    steps: ["Human review", "Explicit conclude", "Local event", "Optional integration"],
+    eyebrow: "保存稳定结论",
+    title: "只保存经过确认的稳定结论",
+    copy: "只有稳定规则、环境事实和明确偏好进入记忆层。运行事件先写本地 JSONL，外部分析由显式命令按需导出。",
+    steps: ["人工确认", "写入稳定结论", "记录本地事件", "按需导出"],
   },
 };
 

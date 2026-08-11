@@ -32,6 +32,7 @@ from langhuan.catalog import (
 from langhuan.cli import main
 from langhuan.config import (
     CatalogCollection,
+    CatalogProcessor,
     ConfigError,
     find_config,
     load_config,
@@ -568,6 +569,20 @@ usage = "Use as policy and ledger infrastructure."
                     ],
                 },
                 {
+                    "id": "reading-ledger-lifecycle",
+                    "kind": "ledger",
+                    "unit_id": "history-chapter-01",
+                    "expected": {
+                        "processing_status": "integrated",
+                        "cleanup_status": "ready-for-cleanup",
+                    },
+                    "input": {
+                        "path": "Inbox/Books/WeRead/Chapter raw.md",
+                        "presence": "present",
+                    },
+                    "output_path": "Sources/Books/History/Chapter.md",
+                },
+                {
                     "id": "ambiguous-target",
                     "kind": "agent",
                     "expected_status": "target_required",
@@ -789,11 +804,68 @@ usage = "Use as policy and ledger infrastructure."
             load_config(self.config_path)
 
         self.config_path.write_text(
+            original.replace(
+                'processor = "project-note"', 'processor = "undeclared"', 1
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ConfigError, "undeclared processor"):
+            load_config(self.config_path)
+
+        self.config_path.write_text(
             original.replace('processor = "project-note"', 'processor = "bad value"', 1),
             encoding="utf-8",
         )
         with self.assertRaises(ConfigError):
             load_config(self.config_path)
+
+    def test_processor_checks_come_from_config_and_missing_runtime_values_block(self) -> None:
+        self.assertEqual(
+            self.settings.catalog.processors["project-note"].required_checks, ()
+        )
+        catalog, _summary = sync_catalog(self.settings)
+        history = self.settings.catalog.collections["history_sources"]
+        settings = replace(
+            self.settings,
+            catalog=replace(
+                self.settings.catalog,
+                collections={
+                    **self.settings.catalog.collections,
+                    "history_sources": replace(history, processor="undeclared"),
+                },
+            ),
+        )
+        blocked = task_envelope(
+            settings,
+            catalog,
+            path="Sources/Books/History/Chapter.md",
+        )
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertIn("processor_undefined", blocked["preflight"]["blocks"])
+        self.assertNotIn(
+            "check_people_events_time_concepts", blocked["required_checks"]
+        )
+
+        declared_settings = replace(
+            settings,
+            catalog=replace(
+                settings.catalog,
+                processors={
+                    **settings.catalog.processors,
+                    "undeclared": CatalogProcessor(
+                        name="undeclared",
+                        required_checks=("configured_history_check",),
+                    ),
+                },
+            ),
+        )
+        declared = task_envelope(
+            declared_settings,
+            catalog,
+            path="Sources/Books/History/Chapter.md",
+        )
+        self.assertEqual(declared["status"], "ready")
+        self.assertIn("configured_history_check", declared["required_checks"])
 
     def test_ledger_note_id_resolves_a_stale_output_path(self) -> None:
         note_id = "note_" + "b" * 32

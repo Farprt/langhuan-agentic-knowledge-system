@@ -11,7 +11,7 @@ import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Sequence
 
 from .config import CatalogCollection, Settings
 from .reader import FRONTMATTER_RE, PARSER_VERSION, normalize_path, parse_frontmatter, read_markdown
@@ -240,6 +240,10 @@ def _scope_fingerprint(settings: Settings) -> str:
         "collections": {
             name: _collection_payload(collection)
             for name, collection in settings.catalog.collections.items()
+        },
+        "processors": {
+            name: {"required_checks": list(processor.required_checks)}
+            for name, processor in settings.catalog.processors.items()
         },
         "reading_ledger": ledger,
     }
@@ -1967,7 +1971,11 @@ def _ancestor_readmes(
 
 
 def _envelope_checks(
-    workflow: str, action: str, processor: str, *, ledger_matched: bool
+    workflow: str,
+    action: str,
+    processor_checks: Sequence[str],
+    *,
+    ledger_matched: bool,
 ) -> list[str]:
     if workflow == "process-input":
         checks = [
@@ -2007,17 +2015,7 @@ def _envelope_checks(
         checks.extend(
             ["compare_target_hash", "inspect_backlinks_embeds_hubs_ledger"]
         )
-    processor_checks = {
-        "book-input": ["select_reading_protocol", "preserve_source_coordinates"],
-        "paper-input": ["dedupe_citekey_doi"],
-        "web-article-input": ["dedupe_url_author"],
-        "problem-input": ["dedupe_problem_id_url", "check_patterns_related_problems_concepts"],
-        "project-input": ["read_project_hub"],
-        "history-source": ["check_people_events_time_concepts"],
-        "technical-source": ["separate_source_implementation_experiment_adoption"],
-        "leetcode-note": ["check_problem_id_patterns_related_problems_concepts"],
-    }
-    checks.extend(processor_checks.get(processor, []))
+    checks.extend(processor_checks)
     return list(dict.fromkeys(checks))
 
 
@@ -2030,6 +2028,7 @@ def task_envelope(
     workflow: str = "auto",
     action: str = "update",
     char_budget: int = 2000,
+    extra_entrypoints: Iterable[str] = (),
 ) -> dict[str, Any]:
     if workflow not in ENVELOPE_WORKFLOWS:
         raise ValueError("workflow must be auto, process-input, update-note or update-project")
@@ -2135,6 +2134,7 @@ def task_envelope(
         ledger_state = "not_found"
 
     entrypoints = _ancestor_readmes(resolved_path, files) if resolved_path else []
+    entrypoints.extend(str(item) for item in extra_entrypoints if str(item))
     for collection in collection_values:
         entrypoints.extend(collection.entrypoints)
     entrypoints = sorted(
@@ -2153,10 +2153,13 @@ def task_envelope(
     source_ids = [
         str(item.get("source_id", "")) for item in sources if item.get("source_id")
     ]
+    processor_config = settings.catalog.processors.get(processor) if processor else None
+    if processor and processor_config is None:
+        blocks.append("processor_undefined")
     required_checks = _envelope_checks(
         selected_workflow,
         action,
-        processor,
+        processor_config.required_checks if processor_config else (),
         ledger_matched=bool(units),
     )
     links = {
@@ -2183,7 +2186,7 @@ def task_envelope(
         "status": "blocked" if blocks else "ready",
         "workflow": selected_workflow,
         "action": action,
-        "processor": processor or selected_workflow,
+        "processor": processor,
         "target": target,
         "entrypoints": [],
         "ledger": {
@@ -3469,7 +3472,7 @@ def evaluate_agent_cases(
         if not case_id or case_id in case_index:
             failure(definition_failures, "case_id_invalid", case_id)
             continue
-        if kind not in {"agent", "context", "envelope", "lookup"}:
+        if kind not in {"agent", "context", "envelope", "ledger", "lookup"}:
             failure(definition_failures, "case_kind_invalid", case_id, kind=kind)
             continue
         case_index[case_id] = raw_case
@@ -3573,6 +3576,78 @@ def evaluate_agent_cases(
                         mode=mode,
                         expected_path=expected_path,
                     )
+        elif kind == "ledger":
+            unit_id = str(raw_case.get("unit_id", "")).strip()
+            ledger, ledger_issues, _revision = _load_ledger(settings)
+            raw_units = (ledger or {}).get("units", {})
+            unit = raw_units.get(unit_id) if isinstance(raw_units, dict) else None
+            if ledger_issues:
+                failure(
+                    deterministic_failures,
+                    "ledger_unavailable",
+                    case_id,
+                )
+            elif not unit_id or not isinstance(unit, dict):
+                failure(definition_failures, "ledger_unit_missing", case_id, unit_id=unit_id)
+            else:
+                expected = raw_case.get("expected", {})
+                if not isinstance(expected, dict):
+                    failure(definition_failures, "ledger_expected_invalid", case_id)
+                    expected = {}
+                for field, value in expected.items():
+                    if unit.get(field) != value:
+                        failure(
+                            deterministic_failures,
+                            "ledger_mismatch",
+                            case_id,
+                            field=field,
+                            expected=value,
+                            actual=unit.get(field),
+                        )
+                input_case = raw_case.get("input", {})
+                if input_case:
+                    if not isinstance(input_case, dict):
+                        failure(definition_failures, "ledger_input_invalid", case_id)
+                    else:
+                        input_path = str(input_case.get("path", ""))
+                        input_presence = str(input_case.get("presence", ""))
+                        matched_input = next(
+                            (
+                                item
+                                for item in unit.get("inputs", [])
+                                if isinstance(item, dict) and item.get("path") == input_path
+                            ),
+                            None,
+                        )
+                        if not matched_input or matched_input.get("presence") != input_presence:
+                            failure(
+                                deterministic_failures,
+                                "ledger_input_mismatch",
+                                case_id,
+                                path=input_path,
+                                expected=input_presence,
+                                actual=(matched_input or {}).get("presence"),
+                            )
+                output_path = str(raw_case.get("output_path", "")).strip()
+                if output_path:
+                    matched_output = any(
+                        isinstance(item, dict) and item.get("path") == output_path
+                        for item in unit.get("outputs", [])
+                    )
+                    if not matched_output:
+                        failure(
+                            deterministic_failures,
+                            "ledger_output_mismatch",
+                            case_id,
+                            path=output_path,
+                        )
+                    elif output_path not in files:
+                        failure(
+                            definition_failures,
+                            "expected_path_missing",
+                            case_id,
+                            path=output_path,
+                        )
 
     scored_submissions: list[dict[str, Any]] = []
     normalized_by_agent: dict[str, dict[str, dict[str, Any]]] = {}

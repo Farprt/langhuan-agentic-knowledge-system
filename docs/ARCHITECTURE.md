@@ -2,14 +2,17 @@
 
 ## Boundaries
 
-Langhuan 0.1 deliberately has one installable Python package and one configuration file.
+Langhuan 0.2 deliberately has one installable Python package and one configuration file.
 
 1. `reader.py` interprets the Obsidian-specific syntax and emits normalized metadata without absolute source paths.
 2. `catalog.py` maintains a body-free structural inventory, collection registry and optional reading-ledger checks.
 3. `chunking.py` splits on Markdown headings, preserves code fences and adds document context to every chunk.
 4. `index.py` detects changes by content hash and atomically maintains one local index artifact.
 5. `search.py` combines dense and lexical ranks with RRF, then optionally applies a local Cross-Encoder.
-6. `events.py` records a minimal local audit stream. Remote exporters are separate integrations.
+6. `events.py` records retrieval events, while `observability.py` gives Task Envelope,
+   retrieval and verification one shared local `trace_id/run_id`.
+7. `observability_export.py` previews and explicitly exports a redacted metadata projection;
+   remote providers never sit on the local task path.
 
 The public reference backend uses a JSON artifact because it is inspectable, dependency-free and sufficient for the demo and small-to-medium vaults. It performs an O(n) scan per query. A vector database adapter should be added only when a reproducible benchmark shows that this ceiling is material.
 
@@ -27,10 +30,11 @@ langhuan ask "question" --scope project-name --json
 
 JSON results contain a relative source path, heading path, chunk identifier, score and evidence text. The caller decides how much context to place in its prompt and whether a stable conclusion deserves long-term memory.
 
-Catalog commands also use JSON, but never return note bodies. A Task Envelope contains
-the exact target, lifecycle workflow, action, processor, bounded entrypoints, matching
-Reading Ledger units, mandatory checks, mechanical blocks, link counts and independent
-watermarks. This is deterministic task routing; semantic relevance remains the
+Catalog commands also use JSON, but never return note bodies. The Catalog is a structural
+file index. A Task Envelope is the small task-context package returned for one target; it
+contains the target, lifecycle workflow, action, check-rule group (Processor), bounded
+entrypoints, matching processing records (Reading Ledger), mandatory checks, mechanical
+blocks, link counts and independent consistency fingerprints. This is deterministic task routing; semantic relevance remains the
 responsibility of `ask`. `context --query` is deterministic lexical discovery only;
 zero matches return a compact failure contract that directs the caller to semantic RAG.
 Registry-wide navigation requires `context --global`, and a complete filename inventory
@@ -40,6 +44,11 @@ spending tokens on pretty-print whitespace.
 Find responses include exact total/truncation metadata. Envelope/context responses carry
 the structural catalog revision, the catalog content digest, and a byte-exact
 reading-ledger revision.
+
+Processor obligations (named groups of mandatory checks) are declared in `langhuan.toml`, not hard-coded in the Agent or
+inferred from a subject label. A collection that references an undeclared processor is
+rejected during configuration loading, and an undeclared runtime value blocks its Task
+Envelope instead of silently dropping mandatory checks.
 
 Every agent follows the same process contract:
 
@@ -58,7 +67,7 @@ Every agent follows the same process contract:
 
 Semantic Agent behavior is evaluated separately from structural correctness. The
 `catalog evaluate-agent` command consumes explicit case definitions and evidence-only
-submissions. Deterministic Envelope, lookup, and context expectations are executed
+submissions. Deterministic Envelope, Ledger, lookup, and context expectations are executed
 against the live Catalog; Agent cases are scored by required paths found and opened,
 query evidence, forbidden adopted relations, ambiguous-target safety, and pairwise
 agreement. It deliberately does not use an LLM judge or claim open-world completeness.
@@ -88,7 +97,7 @@ and time.
 
 Catalog is a rebuildable structural projection, not another manually maintained
 knowledge store and not a separate graph database. Version 2 exposes four distinct
-watermarks instead of pretending every component shares one global revision:
+consistency fingerprints instead of pretending every component shares one global revision:
 
 - `catalog_revision` hashes a canonical structural projection: schema and scope,
   parser/projection versions, stable or legacy identity, current path, classification,
