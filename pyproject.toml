@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langhuan"
-version = "0.1.0"
-description = "Local-first hybrid retrieval for Obsidian and Markdown projects"
+version = "0.2.0"
+description = "Local-first retrieval and task context for Obsidian and Markdown projects"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Farprt" }]
-keywords = ["obsidian", "rag", "retrieval", "knowledge-base", "agents"]
+keywords = ["obsidian", "rag", "retrieval", "knowledge-base", "agents", "observability"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
@@ -22,6 +22,11 @@ dependencies = []
 
 [project.optional-dependencies]
 models = ["sentence-transformers>=3,<6"]
+observability = [
+  "langfuse>=4,<5",
+  "opentelemetry-sdk>=1,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1,<2",
+]
 
 [project.scripts]
 langhuan = "langhuan.cli:main"

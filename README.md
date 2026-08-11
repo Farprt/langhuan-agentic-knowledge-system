@@ -1,24 +1,26 @@
 # Langhuan（琅嬛）
 
-**面向 Obsidian / Markdown 项目的本地优先 Agent 知识基础设施。**
+**面向 Obsidian / Markdown 项目的本地优先 Agent 知识库工具。**
 
-Langhuan 把结构化笔记转成可增量维护、可限定项目范围、可供不同 Agent 调用的检索上下文。核心 RAG 不依赖云服务；长期记忆与可观测平台是可选边界，而不是运行前提。
+Langhuan 让 Agent 能够检索笔记正文、定位已有文件，并在修改前取得这次任务需要阅读的文件和检查项。核心功能可完全离线运行；长期记忆和云端分析都是可选集成。
 
 ![Langhuan Agentic Knowledge System](showcase/public/og.png)
 
 [打开交互式项目总览](https://farprt.github.io/langhuan-agentic-knowledge-system/)
 
-> 当前为 `0.1.0-alpha`：核心检索可以运行，公开基准指标仍待在固定数据集上实测。`ask` 返回检索证据，不伪装成完整问答 Agent。
+> 当前为 `0.2.0`（Alpha）：检索、结构定位和本地运行记录均可独立使用。公开基准指标仍待在固定数据集上实测；`ask` 只返回检索证据，不伪装成完整问答 Agent。
 
 ## 已实现
 
-- 解析 frontmatter、`[[wikilink]]`、`![[embed]]` 与 Markdown 标题层级；
-- heading-aware chunking，为知识块保留来源与标题上下文；
+- 解析 YAML 元数据、`[[wikilink]]`、`![[embed]]` 与 Markdown 标题层级；
+- 按标题结构分块，并为每个知识片段保留来源与上级标题；
 - 文件 SHA-256 驱动的增量同步、删除检测、原子写入与一致性审计；
-- Dense Retrieval、BM25 与 Reciprocal Rank Fusion（RRF）混合召回；
-- 零依赖 Hash Embedding 离线演示，以及显式加载本地 BGE / Cross-Encoder 的接口；
-- 通过 `scope` 将检索限制在阅读、项目或用户自定义路径；
-- 默认仅写本地 JSONL 元数据，查询正文与摘要采集关闭。
+- 组合语义向量检索、BM25 关键词检索和倒数排名融合（RRF），并可用本地交叉编码器二次排序；
+- 提供零依赖的离线演示，也可以显式加载本地 BGE 模型；
+- 通过 `scope` 把检索限制在指定项目或目录；
+- 生成不含笔记正文的结构索引，帮助 Agent 精确定位文件；
+- 为单个目标生成小型任务上下文包，列出应阅读文件和必须执行的检查；
+- 默认只在本地记录运行元数据，并可显式导出到 AgentLoop 或 Langfuse。
 
 ## 架构
 
@@ -27,17 +29,28 @@ flowchart LR
     V["Obsidian / Markdown Vault"] --> P["结构解析与标题感知分块"]
     C["langhuan.toml"] --> P
     P --> I["文件哈希增量索引"]
-    I --> D["Dense Retrieval"]
-    I --> B["BM25"]
-    D --> R["RRF Fusion"]
+    I --> D["语义向量检索"]
+    I --> B["BM25 关键词检索"]
+    D --> R["结果融合（RRF）"]
     B --> R
-    R --> X["可选本地 Reranker"]
+    R --> X["可选本地二次排序"]
     X --> A["CLI / JSON Agent 接口"]
     A -.显式集成.-> H["Honcho 长期记忆"]
     A -.显式导出.-> O["AgentLoop / Langfuse"]
 ```
 
-核心只负责“把相关、可追溯的证据交给 Agent”。Agent 决策、长期记忆与 Trace 分属不同生命周期，避免一个不可用的外部服务拖垮本地检索。
+核心只负责“把相关、可追溯的证据交给 Agent”。Agent 决策、长期记忆与运行分析互不依赖，外部服务不可用时不会拖垮本地检索。
+
+## 四个核心对象
+
+| 普通名称 | 代码中的名称 | 实际作用 |
+|---|---|---|
+| 正文检索 | RAG | 从笔记正文中找出与问题相关的片段。 |
+| 结构索引 | Catalog | 记录文件路径、标题、别名和显式链接，不保存正文。 |
+| 任务上下文包 | Task Envelope | 针对一个目标返回应阅读文件、处理方式和必须检查的项目。 |
+| 处理记录 | Reading Ledger | 可选记录原始材料、草稿和正式笔记之间的对应与清理状态。 |
+
+这些名称对应代码接口，不要求使用者接受一套新的知识管理术语。可以简单理解为：RAG 负责“找内容”，结构索引负责“找文件”，任务上下文包负责“这次该读什么、检查什么”，处理记录负责“这份材料处理到哪一步”。
 
 ## 五分钟上手
 
@@ -95,7 +108,7 @@ enabled = true
 include_content = false
 ```
 
-配置文件只负责结构与本地路径。API Key、LicenseKey 等凭据必须从环境变量或操作系统密钥存储传入集成层，不能写入 TOML。
+配置文件只负责结构与本地路径。API Key、LicenseKey 等凭据只能通过环境变量传给集成层，不能写入 TOML；如使用外部密钥管理工具，应由它在启动前注入环境变量。
 
 ## 使用本地语义模型
 
@@ -121,7 +134,7 @@ Langhuan 不会隐式访问 Hugging Face。这样可以区分“安装或更新�
 - `events.jsonl` 默认保存事件类型、数量与查询长度，不保存查询正文或可用于关联查询的固定摘要；
 - 索引、日志、模型、真实配置和常见凭据格式均由 `.gitignore` 排除；
 - 写索引使用临时文件替换，完整写入前不会覆盖上一个可用版本；
-- AgentLoop、Langfuse 与 Honcho 都不随核心自动启动或自动上报。
+- AgentLoop、Langfuse 与 Honcho 都不随核心自动启动或自动上报；provider 导出默认只预览，显式 `--send` 才联网。
 
 公开仓库发布前仍应运行秘密扫描与大文件检查。完整威胁边界见 [SECURITY.md](SECURITY.md)。
 
@@ -134,6 +147,30 @@ Langhuan 不会隐式访问 Hugging Face。这样可以区分“安装或更新�
 | Langfuse | 可替换的 Trace、Dataset 与评估出口 | 事件保留本地，不阻塞查询 |
 
 仓库只提供去敏后的边界文档和配置约定，绝不重新发布第三方平台源码。见 [`integrations/`](integrations/README.md)。
+
+### 统一运行记录
+
+`catalog envelope` 默认在本地建立或复用当前 Agent 会话的运行记录，并返回用于关联同一次任务的 `trace_id`、`run_id` 和脱敏会话标识。后续检索、工具调用和验证步骤可以写入同一事件队列：
+
+```powershell
+langhuan catalog envelope --path "Projects/RAG.md" --workflow auto --action update --compact
+langhuan trace current --compact
+langhuan trace emit --component project --operation test --status ok --compact
+langhuan trace finish --status passed --compact
+```
+
+本地事实源位于配置的 `data_dir/observability/events_*.jsonl`。默认事件不含提示词、回复、查询正文或文件内容；`LANGHUAN_TRACE_DISABLED=1` 可关闭当前进程的统一记录。
+
+导出器使用独立游标，只有远端确认成功后才推进。预览不需要 SDK 或凭据；发送前安装可选依赖，并通过环境变量提供凭据：
+
+```powershell
+python -m pip install -e ".[observability]"
+langhuan trace export --provider agentloop
+langhuan trace export --provider agentloop --send
+langhuan trace export --provider langfuse
+```
+
+默认上传只包含关联 ID、Agent、组件、动作、状态、耗时和白名单计数；目标路径只有显式 `--include-local-context` 才加入。Codex、Hermes 等工具自己的运行记录只能按 Agent、脱敏会话标识和时间范围进行关联，本项目不会伪造并不存在的跨平台父子关系。
 
 ## 与知识库仓库的关系
 
@@ -167,11 +204,9 @@ python -m langhuan demo
 
 [`showcase/`](showcase/README.md) 提供面向首次访问者的交互式 HTML 总览。它只展示当前公开代码可验证的能力，Markdown、tests 和版本历史仍是事实源。
 
-## Agent structural catalog
+## 让 Agent 知道库里有什么
 
-RAG answers “which passages are relevant”; the catalog answers “what exists, where it
-lives, and which collection owns it.” It is dependency-free and never returns Markdown
-bodies:
+正文检索回答“哪些段落与问题相关”，结构索引回答“有哪些文件、文件在哪里、属于哪类内容”。结构索引不读取或返回 Markdown 正文：
 
 ```powershell
 langhuan catalog sync
@@ -187,35 +222,23 @@ langhuan catalog evaluate --report .langhuan/evaluation.md
 langhuan catalog evaluate-agent --cases agent-evaluation-cases.json --submission agent-result.json
 ```
 
-`envelope`, `find`, `context`, and `validate` refresh the catalog before answering. Output is stable
-JSON with relative paths, collection roles, links, backlinks, and bounded matches.
-Use `--compact` on any `catalog` subcommand when its output is injected into an
-agent prompt; it removes display indentation without changing the data contract.
-For a known target, `envelope` is the normal Agent entrypoint. It deterministically
-selects `process-input`, `update-note`, or `update-project`, adds processor-specific
-content checks, and returns a metadata-only contract normally bounded to 2000 compact
-JSON characters. `context --query` is lexical-only candidate discovery: it never claims
-semantic search or completeness, and a miss returns a small `no_match` response with a
-RAG next step instead of the Registry. `context --global` explicitly returns the full
-Collection Registry, while `catalog list --all` explicitly returns every cataloged
-relative path. `find` reports `total` and `truncated`; the contracts expose a separate
-`catalog_revision`, `content_digest`, and `reading_ledger_revision`. They respectively
-identify the canonical structural projection, the Markdown content snapshot, and the
-exact Ledger byte snapshot. They are independent dependency watermarks, not one global
-database revision.
-In focused context responses, `registry` and `active_registry` are limited to matched
-and related collections. The local
-`.langhuan/catalog.json` artifact is derived state and stays out of Git.
+`envelope`、`find`、`context` 和 `validate` 会先刷新结构索引，再返回稳定 JSON。`--compact` 只删除排版空白，适合把结果交给 Agent，字段含义不会改变。
 
-Durable notes can use frontmatter IDs shaped as `note_<32 lowercase hex>`.
-`identity_paths` controls where IDs are expected. Existing notes migrate gradually:
-an ID-less note remains visible as an explicit `legacy-path:` identity, but it must
-receive an ID before copy, move, rename, merge, split, or delete. `ensure-id` is
-idempotent for a valid existing ID; malformed and duplicate IDs fail validation.
-Related collections are routing priorities, never a completeness whitelist.
+目标文件已知时，使用 `envelope` 生成任务上下文包。它根据目标类型选择“处理输入”“更新笔记”或“更新项目”，并返回目标文件、应读取入口和必须执行的检查。默认紧凑结果限制在约 2,000 个字符内。
 
-Collections are configurable and may overlap. The most specific path is primary, while
-all matching collections contribute related routes:
+目标未知时：
+
+- `find` 按路径、标题或别名精确定位；
+- `context --query` 只做词面候选查找，不声称理解自然语言语义，也不保证查全；
+- `context --global` 显式查看全部分类规则；
+- `catalog list --all` 显式列出全部相对路径；
+- 词面查找无结果时，再使用正文检索进行语义发现。
+
+`.langhuan/catalog.json` 是可以随时重建的本地文件，不进入 Git。长期笔记可以使用 `note_<32位小写十六进制>` 形式的稳定 ID；移动文件时 ID 保持不变。没有 ID 的旧笔记仍可读取，但在复制、移动、重命名、合并、拆分或删除前应先执行 `ensure-id`。
+
+### 配置内容分类与检查规则
+
+内容分类（代码名 Collection）可以重叠：更具体的路径作为主分类，其他匹配分类提供相关查找方向。检查规则组（代码名 Processor）列出某类任务必须完成的检查：
 
 ```toml
 [catalog]
@@ -226,6 +249,9 @@ identity_paths = ["Sources", "Concepts", "People", "Events", "Time", "Maps", "Ar
 metadata_fields = ["id", "type", "status", "area", "subarea", "source_type", "book", "project"]
 # reading_ledger = "System/Indexes/reading-ledger.json"
 
+[catalog.processors.history-source]
+required_checks = ["check_people_events_time_concepts"]
+
 [catalog.collections.history_sources]
 paths = ["Sources/Books/History"]
 role = "Curated historical reading."
@@ -235,16 +261,13 @@ processor = "history-source"
 related = ["concepts", "events", "people", "time"]
 ```
 
-Collections declare lifecycle routing, while processors add mandatory content-discovery
-checks. They do not form a completeness whitelist: agents still extract candidates from
-the actual note and use exact Catalog lookup or semantic RAG across domains.
+配置中引用的检查规则组必须先声明；拼写错误或未知值会直接报错，避免静默跳过检查。检查规则组只定义最低要求，不限制 Agent 发现其他相关对象。
 
-Set `include_non_markdown = true` only when agents need an inventory of assets or code.
-Those files contribute path, extension, size, and modification time only: Langhuan does
-not read their contents or compute content hashes.
+只有确实需要清点图片或代码文件时才启用 `include_non_markdown = true`。这类文件只记录路径、扩展名、大小和修改时间，不读取内容，也不计算内容哈希。
 
-An optional reading ledger connects raw, draft, and official notes without guessing from
-filenames:
+### 可选的材料处理记录
+
+处理记录用于连接原始材料、草稿和正式笔记，避免只凭文件名猜测处理状态：
 
 ```json
 {
@@ -279,31 +302,18 @@ filenames:
 }
 ```
 
-Inputs use `presence = present|removed|unknown` and may include SHA-256. `catalog
-envelope --path ...` returns the target's matching units and required lifecycle checks;
-`catalog validate` checks source references,
-paths, hashes, and the versioned processing and cleanup statuses.
-`catalog evaluate` derives body-free regression checks from the current stable IDs,
-unique titles/aliases, explicit links, Ledger contract, and deterministic Task
-Envelopes. The Markdown scorecard separates blocking mechanism failures from quality
-gaps such as unresolved or ambiguous known relations; `--strict` makes quality gaps
-fail the command. It does not claim to evaluate implicit semantic completeness.
-`catalog evaluate-agent` complements it with a small explicit case file and one or more
-evidence-only Agent submissions. Cases declare deterministic Envelope/lookup/context
-expectations plus `must_find`, `allowed_adopt`, and `must_not_adopt` relations. The
-scorer checks target safety, recall, opened-source evidence, forbidden relations, and
-cross-Agent agreement without asking an LLM to grade its own answer. Submission and
-case files contain paths and decisions, not note bodies.
-An official output may additionally use `extensions.note_id`; ID is resolved first,
-while `path` remains a readable locator. An ID/path mismatch is an error, while a stale
-path with a uniquely resolved ID is a repairable warning.
-Legacy `"version": 1` ledgers with array units remain readable with a migration warning.
+输入可以记录 `present`（仍存在）、`removed`（已清理）或 `unknown`，也可以保存 SHA-256。任务上下文包会返回目标对应的处理记录；`catalog validate` 检查来源引用、路径、哈希和处理状态。
 
-The RAG index has its own `rag_input_digest`, covering the exact include/exclude
-boundary, source paths and hashes, parser/chunker/tokenizer versions, chunk parameters,
-and local embedding-model identity. `storage_consistent` only checks index-internal
-identity; `fresh` compares indexed and current inputs; `ready` requires both plus the
-current pipeline fingerprint. A legacy index therefore cannot silently claim readiness.
+`catalog evaluate` 根据稳定 ID、唯一标题、显式链接、处理记录和任务上下文包执行不读取正文的结构回归。`catalog evaluate-agent` 使用少量人工定义案例，检查 Agent 是否找到并实际打开必需文件、是否采用禁止关系，以及不同 Agent 的结果是否一致；评分器不让模型给自己打分。
+
+为避免“一个版本号代表所有状态”的误解，输出分别提供：
+
+- `catalog_revision`：当前结构索引的指纹；
+- `content_digest`：当前 Markdown 内容集合的指纹；
+- `reading_ledger_revision`：处理记录文件的指纹；
+- `rag_input_digest`：正文索引输入、分块参数和模型配置的指纹。
+
+这些字段只用于判断两个结果是否基于同一批输入，不是需要人工维护的版本号。
 
 ## License
 

@@ -16,6 +16,12 @@ identity_paths = ["Sources", "Concepts", "Maps", "Areas", "Projects"]
 metadata_fields = ["id", "type", "status", "area", "subarea", "source_type", "book", "project", "year", "start_year", "end_year", "processing_unit", "processing_status", "official_note"]
 # reading_ledger = "System/Indexes/reading-ledger.json"
 
+[catalog.processors.project-note]
+required_checks = []
+
+[catalog.processors.input]
+required_checks = []
+
 [catalog.collections.home]
 paths = ["Home"]
 role = "Stable entrypoints for people and agents."

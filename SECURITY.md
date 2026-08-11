@@ -21,7 +21,7 @@ These classes are ignored by Git, but `.gitignore` is not a security boundary. R
 - Hash Embedding runs without a network connection.
 - Non-hash embedding and reranking models must resolve to existing local directories.
 - Query content is excluded from events unless `observability.include_content = true` is explicitly set.
-- The core package contains no AgentLoop, Langfuse or Honcho credentials and performs no remote export.
+- The package contains no AgentLoop, Langfuse or Honcho credentials and never exports automatically. Only an explicit `langhuan trace export ... --send` command can contact a configured provider.
 
 ## Supported versions
 

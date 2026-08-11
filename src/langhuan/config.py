@@ -43,6 +43,12 @@ class CatalogCollection:
 
 
 @dataclass(frozen=True)
+class CatalogProcessor:
+    name: str
+    required_checks: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class CatalogSettings:
     include: tuple[str, ...] = (".",)
     exclude: tuple[str, ...] = (".git", ".obsidian", ".langhuan")
@@ -50,6 +56,7 @@ class CatalogSettings:
     include_non_markdown: bool = False
     metadata_fields: tuple[str, ...] = DEFAULT_CATALOG_FIELDS
     collections: dict[str, CatalogCollection] = field(default_factory=dict)
+    processors: dict[str, CatalogProcessor] = field(default_factory=dict)
     reading_ledger: Path | None = None
 
 
@@ -101,6 +108,20 @@ def _strings(value: Any, name: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ConfigError(f"{name} must be an array of strings")
     return tuple(item.replace("\\", "/").strip("/") for item in value if item.strip("/"))
+
+
+def _identifiers(value: Any, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ConfigError(f"{name} must be an array of strings")
+    identifiers = tuple(item.strip() for item in value)
+    if any(
+        not item or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", item)
+        for item in identifiers
+    ):
+        raise ConfigError(
+            f"{name} entries must use letters, digits, underscores, dots or hyphens"
+        )
+    return identifiers
 
 
 def _relative_strings(value: Any, name: str) -> tuple[str, ...]:
@@ -181,6 +202,7 @@ def load_config(path: str | Path | None = None) -> Settings:
     raw_scopes = _table(data, "scopes")
     raw_catalog = _table(data, "catalog")
     raw_collections = _table(raw_catalog, "collections")
+    raw_processors = _table(raw_catalog, "processors")
 
     include = _strings(vault.get("include", ["."]), "vault.include")
     if not include:
@@ -224,6 +246,21 @@ def load_config(path: str | Path | None = None) -> Settings:
         raw_catalog.get("metadata_fields", list(DEFAULT_CATALOG_FIELDS)),
         "catalog.metadata_fields",
     )
+    processors: dict[str, CatalogProcessor] = {}
+    for name, raw_processor in raw_processors.items():
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", name):
+            raise ConfigError(
+                f"catalog processor {name!r} must use letters, digits, underscores or hyphens"
+            )
+        if not isinstance(raw_processor, dict):
+            raise ConfigError(f"catalog.processors.{name} must be a TOML table")
+        processors[name] = CatalogProcessor(
+            name=name,
+            required_checks=_identifiers(
+                raw_processor.get("required_checks", []),
+                f"catalog.processors.{name}.required_checks",
+            ),
+        )
     collections: dict[str, CatalogCollection] = {}
     for name, raw_collection in raw_collections.items():
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", name):
@@ -288,6 +325,14 @@ def load_config(path: str | Path | None = None) -> Settings:
                 f"catalog.collections.{name}.processor must use letters, digits, "
                 "underscores or hyphens"
             )
+        if (
+            collections[name].processor
+            and collections[name].processor not in processors
+        ):
+            raise ConfigError(
+                f"catalog.collections.{name}.processor references undeclared processor "
+                f"{collections[name].processor!r}"
+            )
     for collection in collections.values():
         unknown = sorted(set(collection.related) - set(collections))
         if unknown:
@@ -350,6 +395,7 @@ def load_config(path: str | Path | None = None) -> Settings:
             ),
             metadata_fields=metadata_fields,
             collections=collections,
+            processors=processors,
             reading_ledger=reading_ledger,
         ),
     )
@@ -374,6 +420,42 @@ exclude = [".git", ".obsidian", ".langhuan"]
 identity_paths = ["Sources", "Concepts", "People", "Events", "Time", "Maps", "Areas", "Projects"]
 include_non_markdown = false
 metadata_fields = ["type", "status", "area", "subarea", "source_type", "book", "project", "year", "start_year", "end_year", "processing_unit", "processing_status", "official_note"]
+
+[catalog.processors.history-source]
+required_checks = ["check_people_events_time_concepts"]
+
+[catalog.processors.technical-source]
+required_checks = ["separate_source_implementation_experiment_adoption"]
+
+[catalog.processors.leetcode-note]
+required_checks = ["check_problem_id_patterns_related_problems_concepts"]
+
+[catalog.processors.project-note]
+required_checks = []
+
+[catalog.processors.project]
+required_checks = []
+
+[catalog.processors.input]
+required_checks = []
+
+[catalog.processors.book-input]
+required_checks = ["select_reading_protocol", "preserve_source_coordinates"]
+
+[catalog.processors.paper-input]
+required_checks = ["dedupe_citekey_doi"]
+
+[catalog.processors.web-article-input]
+required_checks = ["dedupe_url_author"]
+
+[catalog.processors.problem-input]
+required_checks = ["dedupe_problem_id_url", "check_patterns_related_problems_concepts"]
+
+[catalog.processors.project-input]
+required_checks = ["read_project_hub"]
+
+[catalog.processors.processing-input]
+required_checks = []
 
 [catalog.collections.sources]
 paths = ["Sources"]

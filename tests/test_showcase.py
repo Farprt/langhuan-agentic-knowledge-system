@@ -28,9 +28,9 @@ class _DocumentParser(HTMLParser):
 class ShowcaseTests(unittest.TestCase):
     def test_static_showcase_has_required_content_and_assets(self) -> None:
         html = (SHOWCASE / "index.html").read_text(encoding="utf-8")
-        self.assertIn("让 Agent 使用你的知识库", html)
+        self.assertIn("让 Agent 在你的知识库中", html)
         self.assertIn("langhuan demo", html)
-        self.assertIn("开源 v0.1", html)
+        self.assertIn("公开版本提供演示知识库", html)
         self.assertNotIn("single-writer", html)
         self.assertNotIn("react-loading-skeleton", html)
 

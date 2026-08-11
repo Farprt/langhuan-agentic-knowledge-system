@@ -11,4 +11,4 @@ Recommended flow:
 
 Use the upstream Honcho deployment rather than copying its source into this repository. Keep its API key, workspace identifier, database and embedding service configuration outside Git. A memory outage must degrade to “no cross-session memory,” not “no local RAG.”
 
-No Honcho client is shipped in 0.1 because the private deployment contract has not yet been converted into a provider-neutral, reproducible test fixture.
+No Honcho client is bundled. The repository documents the boundary only because no provider-neutral, reproducible Honcho test fixture has been published yet.
