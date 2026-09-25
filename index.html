@@ -21,59 +21,59 @@
       <header class="site-header">
         <a class="brand" href="#top" aria-label="Langhuan 首页"><span class="brand-mark">琅</span><span>Langhuan</span></a>
         <nav aria-label="页面导航">
-          <a href="#architecture">架构</a><a href="#evidence">能力</a><a href="#quickstart">上手</a><a href="#privacy">数据</a>
+          <a href="#architecture">工作方式</a><a href="#evidence">工程基础</a><a href="#quickstart">快速开始</a><a href="#privacy">数据边界</a>
         </nav>
         <a class="header-link" href="https://github.com/Farprt/langhuan-agentic-knowledge-system">GitHub ↗</a>
       </header>
 
       <section class="hero section-shell" id="top">
         <div class="hero-copy">
-          <p class="kicker">LOCAL-FIRST · OBSIDIAN-NATIVE · AGENT-READY</p>
-          <h1>让 Agent 在你的知识库中，<span>找回位置、发现关联，并打开原文。</span></h1>
-          <p class="hero-lede">Langhuan 面向 Obsidian / Markdown 知识库：从目录结构和正文检索发现跨领域候选，选择相关笔记后直接读取当前 Markdown 原文。普通阅读不必先登记任务；受控修改可按操作查看对应入口与检查。</p>
+          <p class="kicker">LANGHUAN / 琅嬛 <span class="release-badge">v0.3.0 · 开源</span></p>
+          <h1><span class="hero-intro">让 Agent 在你的知识库中</span>找回位置，<br><span>连接已有知识。</span></h1>
+          <p class="hero-lede">笔记分散在书籍、概念和项目里，关联不该止于目录。Langhuan 将结构定位、混合检索和原文阅读连起来，让 Agent 从已有资料出发。</p>
           <div class="hero-actions">
-            <a class="button primary" href="#quickstart">5 分钟了解项目</a>
+            <a class="button primary" href="#quickstart">运行离线 Demo <span aria-hidden="true">↗</span></a>
             <a class="button secondary" href="https://github.com/Farprt/Obsidian_Notes_Workspace">查看知识库示例</a>
           </div>
-          <p class="hero-note">公开知识库提供目录和工作流示例；其他 Markdown 目录可通过一个配置文件接入。</p>
+          <p class="hero-note">适用于 Obsidian / Markdown · 本地优先 · 普通阅读不必先登记任务</p>
         </div>
 
         <div class="flow-console">
-          <div class="console-topline"><span>导航与阅读</span><span class="status-dot">本地</span></div>
+          <div class="console-topline"><span>一个问题，三步找到依据</span><span class="status-dot">流程示意</span></div>
           <div class="flow-tabs" role="tablist" aria-label="选择流水线阶段">
-            <button class="active" id="tab-task" role="tab" aria-selected="true" aria-controls="flow-panel" data-flow="task" tabindex="0" type="button">找与读</button>
-            <button id="tab-edit" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="edit" tabindex="-1" type="button">索引维护</button>
-            <button id="tab-conclude" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="conclude" tabindex="-1" type="button">受控修改</button>
+            <button class="active" id="tab-task" role="tab" aria-selected="true" aria-controls="flow-panel" data-flow="task" tabindex="0" type="button">01 定位</button>
+            <button id="tab-edit" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="edit" tabindex="-1" type="button">02 发现</button>
+            <button id="tab-conclude" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="conclude" tabindex="-1" type="button">03 阅读</button>
           </div>
           <div class="flow-body" id="flow-panel" role="tabpanel" aria-labelledby="tab-task">
-            <p class="flow-eyebrow" id="flow-eyebrow">跨目录发现</p>
-            <h2 id="flow-title">从候选笔记走到当前原文</h2>
-            <p id="flow-copy">用 Catalog 找路径，用正文检索发现任意分类下的候选，再选择来源打开当前 Markdown 小节。候选排名提供方向，不替代来源核对。</p>
+            <p class="flow-eyebrow" id="flow-eyebrow">CATALOG / 结构定位</p>
+            <h2 id="flow-title">先知道，自己在哪里。</h2>
+            <p id="flow-copy">从路径、标题和别名定位已有笔记，再查看目录、入口与显式链接。换一次对话，也有重新出发的位置。</p>
             <ol class="flow-steps" id="flow-steps">
-              <li><span>01</span>描述问题</li><li><span>02</span>找候选</li><li><span>03</span>选择来源</li><li><span>04</span>读原文</li>
+              <li><span>目标</span>Projects / 示例项目</li><li><span>位置</span>项目主页与目录结构</li><li><span>线索</span>已有链接与相关入口</li>
             </ol>
           </div>
         </div>
       </section>
 
       <section class="proof-strip" aria-label="核心工程能力">
-        <div><strong>混合检索</strong><span>语义向量 + BM25 + RRF + 二次排序</span></div>
-        <div><strong>增量更新</strong><span>哈希同步、删除检测与原子替换</span></div>
-        <div><strong>运行验证</strong><span>一致性检查与本地事件记录</span></div>
-        <div><strong>按需集成</strong><span>长期记忆与云端分析均为可选</span></div>
+        <div><strong>你的 Markdown</strong><span>沿用现有文件与链接</span></div>
+        <div><strong>本地运行</strong><span>离线 Demo，无需云账号</span></div>
+        <div><strong>来源可追溯</strong><span>文件路径与原文章节</span></div>
+        <div><strong>Apache 2.0</strong><span>源码、示例与测试公开</span></div>
       </section>
 
       <section class="section-shell section-block" id="architecture">
-        <div class="section-heading"><p class="kicker">工作流程</p><h2>从知识库结构到来源阅读</h2><p>Catalog 提供位置线索，混合检索发现内容关联，阅读命令打开当前 Markdown 原文；任务上下文与本地追踪按需要使用。</p></div>
+        <div class="section-heading"><p class="kicker">工作流程</p><h2>找到线索，再回到原文。</h2><p>目录告诉你位置，检索补充跨目录的候选，原文提供判断依据。三步可以独立使用，也能接入现有 Agent 工作流。</p></div>
         <div class="architecture-grid">
-          <article class="architecture-card accent-a"><p class="card-index">01 / CONFIG</p><h3>知识库配置</h3><p>一个 <code>langhuan.toml</code> 描述目录、YAML 字段、检索范围和非敏感运行选项。</p><ul><li>Obsidian 结构化解析</li><li>项目级检索范围</li><li>路径与配置可移植</li></ul></article>
-          <article class="architecture-card accent-b"><p class="card-index">02 / DISCOVER</p><h3>定位并阅读来源</h3><p>按路径、标题或语义找到候选文件，选择后从当前 Markdown 读取指定小节。</p><ul><li>结果保留原始相对路径</li><li>多来源可一次选择</li><li>字符上限明确，正文在本地读取</li></ul></article>
-          <article class="architecture-card accent-c"><p class="card-index">03 / OPTIONAL</p><h3>按需运行记录</h3><p>需要回看操作耗时或状态时，可在本地 JSONL 记录步骤；AgentLoop 和 Langfuse 是可选分析出口。</p><ul><li>不作为普通阅读前置</li><li>正文采集默认关闭</li><li>导出与检索分离</li></ul></article>
+          <article class="architecture-card accent-a"><p class="card-index">01 / LOCATE</p><h3>恢复知识位置</h3><p>从文件路径、标题和别名定位目标，查看结构与已有链接。</p><ul><li>保留原有目录组织</li><li>不依赖上一次对话的记忆</li></ul><code>catalog find / context</code></article>
+          <article class="architecture-card accent-b"><p class="card-index">02 / DISCOVER</p><h3>发现补充来源</h3><p>结合语义与关键词检索，在不同目录中找相关材料，按文件汇总候选。</p><ul><li>保留命中章节和来源路径</li><li>按任务选择检索范围</li></ul><code>ask --output candidates.json</code></article>
+          <article class="architecture-card accent-c"><p class="card-index">03 / READ</p><h3>打开原文核对</h3><p>选择来源，直接读取当前 Markdown 的相关小节，带着上下文形成结论。</p><ul><li>选择来源，而非照抄摘要</li><li>返回范围与截断状态明确</li></ul><code>catalog read --sources …</code></article>
         </div>
       </section>
 
       <section class="section-shell section-block" id="evidence">
-        <div class="section-heading split-heading"><div><p class="kicker">核心能力</p><h2>解析、检索与增量维护</h2></div><p>公开版本提供演示知识库和自动测试；实际生产环境已运行在数千个知识片段的私人知识库中。</p></div>
+        <div class="section-heading split-heading"><div><p class="kicker">工程基础</p><h2>简单的入口，清晰的底层。</h2></div><p>公开版本提供演示知识库和自动测试。检索提供候选，内容是否适用，仍需 Agent 结合来源判断。</p></div>
         <div class="evidence-layout">
           <div class="capability-list">
             <article><span>解析</span><h3>理解 Obsidian，而不只是读取纯文本</h3><p>YAML 元数据、双向链接、嵌入引用和标题层级都会保留在知识片段中。</p></article>
@@ -85,20 +85,19 @@
       </section>
 
       <section class="quickstart section-shell section-block" id="quickstart">
-        <div class="quickstart-copy"><p class="kicker">FIVE-MINUTE PATH</p>
-          <h2>先跑通离线 demo，再决定是否启用模型与云端集成</h2>
-          <p>首次体验不要求 Docker、Honcho、AgentLoop、Langfuse 或任何云账号。程序不会自动下载生产模型，需要时可单独准备本地模型。</p>
-          <div class="route-tags"><span>01 Demo</span><span>02 Init</span><span>03 Doctor</span><span>04 Index</span><span>05 Ask</span></div></div>
-          <div class="code-window"><div class="code-toolbar"><span>PowerShell / Bash</span><button id="copy-quickstart" type="button">复制</button></div><pre><code id="quickstart-code">
-            git clone https://github.com/Farprt/langhuan-agentic-knowledge-system.git
-            cd langhuan-agentic-knowledge-system
-            python -m pip install -e .
-            langhuan demo
-            langhuan init --vault ./examples/demo-vault
-            langhuan doctor
-            langhuan index
-            langhuan ask "events include query content" --output candidates.json
-            langhuan catalog read --sources candidates.json --select 1 --compact</code></pre><p class="copy-status" id="copy-status" aria-live="polite"></p></div>
+        <div class="quickstart-copy"><p class="kicker">快速开始 / PYTHON 3.11+</p>
+          <h2>从一个离线 Demo 开始。</h2>
+          <p>先用合成示例体验检索与阅读，再通过配置接入自己的知识库。默认演示不下载模型；语义模型和外部服务按需启用。</p>
+          <div class="route-tags"><span>01 Demo</span><span>02 Init</span><span>03 Doctor</span><span>04 Index</span><span>05 Ask → Read</span></div></div>
+          <div class="code-window"><div class="code-toolbar"><span>PowerShell / Bash</span><button id="copy-quickstart" type="button">复制</button></div><pre><code id="quickstart-code">git clone https://github.com/Farprt/langhuan-agentic-knowledge-system.git
+cd langhuan-agentic-knowledge-system
+python -m pip install -e .
+langhuan demo
+langhuan init --vault ./examples/demo-vault
+langhuan doctor
+langhuan index
+langhuan ask "events include query content" --output candidates.json
+langhuan catalog read --sources candidates.json --select 1 --compact</code></pre><p class="copy-status" id="copy-status" aria-live="polite"></p></div>
       </section>
 
       <section class="section-shell section-block" id="privacy">
@@ -111,8 +110,8 @@
       </section>
 
       <section class="ownership section-shell section-block">
-        <div><p class="kicker">实现范围</p><h2>核心模块与可选服务</h2></div>
-        <div class="ownership-columns"><div><span>核心模块</span><p>Obsidian 解析、按标题分块、混合检索、增量同步、文件结构索引、任务上下文、本地运行记录与一致性检查。</p></div><div><span>可选能力</span><p>可加载已准备好的本地 BGE 和交叉编码器模型；运行记录可按需导出到 AgentLoop 或 Langfuse，Honcho 集成按约定由外部 Agent 完成。</p></div></div>
+        <div><p class="kicker">继续了解</p><h2>从源码，看到实际边界。</h2><p>查看安装说明、公开架构和演示知识库，判断它是否适合你的工作流。</p></div>
+        <div class="closing-links"><a href="https://github.com/Farprt/langhuan-agentic-knowledge-system">引擎源码与文档 <span aria-hidden="true">↗</span></a><a href="https://github.com/Farprt/Obsidian_Notes_Workspace">公开知识库示例 <span aria-hidden="true">↗</span></a></div>
       </section>
 
       <footer><div><span class="brand-mark">琅</span><strong>Langhuan</strong></div><p>公开知识库示例 · 可复用引擎 · 私有生产实践</p><a href="https://github.com/Farprt/langhuan-agentic-knowledge-system">查看源码 ↗</a></footer>

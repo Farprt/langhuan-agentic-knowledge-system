@@ -16,11 +16,7 @@
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  background:
-    linear-gradient(rgba(23, 32, 30, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(23, 32, 30, 0.035) 1px, transparent 1px),
-    var(--paper);
-  background-size: 32px 32px;
+  background: var(--paper);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
@@ -33,7 +29,7 @@ code, pre, .kicker, .card-index, .panel-label, .boundary-state { font-family: "C
 .skip-link:focus { top: 14px; }
 
 .section-shell { width: min(1180px, calc(100% - 48px)); margin-inline: auto; }
-.section-block { padding-block: 112px; }
+.section-block { padding-block: 84px; }
 .kicker { margin: 0 0 18px; color: var(--teal); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.16em; }
 .site-header {
   align-items: center;
@@ -55,18 +51,18 @@ code, pre, .kicker, .card-index, .panel-label, .boundary-state { font-family: "C
 .site-header nav a:hover { color: var(--ink); }
 .header-link { justify-self: end; font-family: "Cascadia Code", monospace; font-size: 0.78rem; font-weight: 750; }
 
-.hero { align-items: center; display: grid; gap: 7vw; grid-template-columns: 1.07fr 0.93fr; min-height: calc(100vh - 72px); padding-block: 88px; }
-.hero-copy h1 { font-size: clamp(3.2rem, 6vw, 6.5rem); font-weight: 780; letter-spacing: -0.072em; line-height: 0.97; margin: 0; max-width: 850px; }
+.hero { align-items: center; display: grid; gap: 64px; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 620px; padding-block: 76px; }
+.hero-copy h1 { font-size: clamp(2.3rem, 3.5vw, 3.35rem); font-weight: 720; letter-spacing: -0.045em; line-height: 1.34; margin: 0; max-width: 580px; text-wrap: balance; }
 .hero-copy h1 span { color: var(--teal); display: block; }
-.hero-lede { color: #3f4b47; font-size: clamp(1.05rem, 1.6vw, 1.32rem); line-height: 1.75; margin: 34px 0 0; max-width: 720px; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
-.button { border: 1px solid var(--ink); border-radius: 3px; display: inline-flex; font-size: 0.9rem; font-weight: 750; padding: 14px 19px; }
+.hero-lede { color: #3f4b47; font-size: 1.02rem; line-height: 1.75; margin: 24px 0 0; max-width: 470px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.button { border: 1px solid var(--ink); border-radius: 6px; display: inline-flex; font-size: 0.9rem; font-weight: 750; padding: 13px 17px; gap: 20px; align-items: center; }
 .button.primary { background: var(--ink); color: white; }
 .button.primary:hover { background: var(--teal); border-color: var(--teal); }
 .button.secondary:hover { background: rgba(255,255,255,.5); }
-.hero-note { border-left: 3px solid var(--amber); color: var(--muted); font-size: 0.82rem; line-height: 1.6; margin: 28px 0 0; max-width: 620px; padding-left: 13px; }
+.hero-note { border-left: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.6; margin: 28px 0 0; max-width: 620px; padding-left: 0; }
 
-.flow-console { background: var(--night); border-radius: 7px; box-shadow: 0 28px 70px rgba(21, 32, 30, .2); color: #edf3f0; min-height: 530px; overflow: hidden; position: relative; }
+.flow-console { background: var(--night); border-radius: 16px; box-shadow: 0 18px 44px rgba(21, 32, 30, .12); color: #edf3f0; min-height: 440px; overflow: hidden; position: relative; }
 .flow-console::before { background: radial-gradient(circle, rgba(43,167,151,.24), transparent 65%); content: ""; height: 360px; position: absolute; right: -90px; top: 70px; width: 360px; }
 .console-topline { border-bottom: 1px solid rgba(255,255,255,.12); color: #aebdb8; display: flex; font-family: "Cascadia Code", monospace; font-size: .68rem; justify-content: space-between; letter-spacing: .12em; padding: 19px 23px; position: relative; }
 .status-dot { color: #78d8c9; }
@@ -75,30 +71,30 @@ code, pre, .kicker, .card-index, .panel-label, .boundary-state { font-family: "C
 .flow-tabs button { background: transparent; border: 0; border-right: 1px solid rgba(255,255,255,.1); color: #93a59f; cursor: pointer; font: inherit; font-size: .78rem; padding: 16px 8px; }
 .flow-tabs button:last-child { border-right: 0; }
 .flow-tabs button.active { background: rgba(43,167,151,.12); color: white; box-shadow: inset 0 -2px var(--teal-bright); }
-.flow-body { padding: 52px 42px 36px; position: relative; }
+.flow-body { padding: 30px 30px 28px; position: relative; }
 .flow-eyebrow { color: var(--teal-bright)!important; font-family: "Cascadia Code", monospace; font-size: .68rem!important; font-weight: 800; letter-spacing: .16em; }
-.flow-body h2 { font-size: clamp(1.8rem, 3vw, 2.65rem); letter-spacing: -.045em; line-height: 1.08; margin: 13px 0 18px; max-width: 480px; }
+.flow-body h2 { font-size: clamp(1.4rem, 2vw, 1.75rem); letter-spacing: -.025em; line-height: 1.45; margin: 13px 0 18px; max-width: 480px; }
 .flow-body > p { color: #b6c5c0; font-size: .93rem; line-height: 1.75; max-width: 520px; }
 .flow-steps { display: grid; gap: 10px; list-style: none; margin: 32px 0 0; padding: 0; }
 .flow-steps li { align-items: center; border: 1px solid rgba(255,255,255,.12); border-radius: 3px; display: flex; font-family: "Cascadia Code", monospace; font-size: .72rem; gap: 16px; padding: 12px 14px; }
 .flow-steps li span { color: var(--amber); }
 
 .proof-strip { background: var(--paper-deep); border-block: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); }
-.proof-strip div { border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; min-height: 118px; padding: 28px 3.8vw; }
+.proof-strip div { border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 7px; min-height: 98px; padding: 24px 3.8vw; }
 .proof-strip div:last-child { border-right: 0; }
-.proof-strip strong { font-size: 1.18rem; }
+.proof-strip strong { font-size: 1rem; }
 .proof-strip span { color: var(--muted); font-size: .76rem; line-height: 1.5; }
 
 .section-heading { max-width: 760px; }
-.section-heading h2, .quickstart h2, .ownership h2 { font-size: clamp(2.35rem, 4.4vw, 4.8rem); letter-spacing: -.06em; line-height: 1.03; margin: 0; }
+.section-heading h2, .quickstart h2, .ownership h2 { font-size: clamp(1.8rem, 2.6vw, 2.5rem); letter-spacing: -.035em; line-height: 1.35; margin: 0; }
 .section-heading > p:last-child { color: var(--muted); font-size: 1.02rem; line-height: 1.75; margin-top: 22px; }
-.architecture-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); margin-top: 54px; }
-.architecture-card { background: rgba(255,255,255,.42); border: 1px solid var(--line); border-radius: 5px; min-height: 390px; padding: 30px; position: relative; }
+.architecture-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); margin-top: 34px; }
+.architecture-card { background: rgba(255,255,255,.42); border: 1px solid var(--line); border-radius: 10px; min-height: 310px; padding: 30px; position: relative; }
 .architecture-card::before { background: var(--teal); content: ""; height: 4px; left: -1px; position: absolute; right: -1px; top: -1px; }
 .architecture-card.accent-b::before { background: var(--amber); }
 .architecture-card.accent-c::before { background: var(--coral); }
 .card-index { color: var(--muted); font-size: .68rem; letter-spacing: .12em; }
-.architecture-card h3 { font-size: 1.85rem; letter-spacing: -.04em; margin: 72px 0 15px; }
+.architecture-card h3 { font-size: 1.35rem; letter-spacing: -.03em; margin: 34px 0 14px; }
 .architecture-card > p:not(.card-index) { color: var(--muted); line-height: 1.7; }
 .architecture-card ul { border-top: 1px solid var(--line); display: grid; gap: 10px; list-style: none; margin: 30px 0 0; padding: 22px 0 0; }
 .architecture-card li { font-size: .82rem; }
@@ -106,20 +102,20 @@ code, pre, .kicker, .card-index, .panel-label, .boundary-state { font-family: "C
 
 .split-heading { align-items: end; display: grid; gap: 50px; grid-template-columns: 1fr .6fr; max-width: none; }
 .split-heading > p { margin: 0!important; }
-.evidence-layout { display: grid; gap: 70px; grid-template-columns: 1.15fr .85fr; margin-top: 58px; }
-.capability-list article { border-top: 1px solid var(--line); display: grid; gap: 25px; grid-template-columns: 100px 1fr 1.2fr; padding: 27px 0; }
+.evidence-layout { display: grid; gap: 40px; grid-template-columns: minmax(0, 1.45fr) minmax(0, .8fr); margin-top: 36px; }
+.capability-list article { border-top: 1px solid var(--line); display: grid; gap: 14px 20px; grid-template-columns: 88px 1fr; padding: 27px 0; }
 .capability-list article > span { color: var(--teal); font-family: "Cascadia Code", monospace; font-size: .7rem; font-weight: 800; text-transform: uppercase; }
 .capability-list h3 { font-size: 1.15rem; line-height: 1.4; margin: 0; }
-.capability-list p { color: var(--muted); font-size: .88rem; line-height: 1.7; margin: 0; }
+.capability-list p { grid-column: 2; color: var(--muted); font-size: .88rem; line-height: 1.7; margin: 0; }
 .metrics-panel { background: var(--night); border-radius: 5px; color: white; padding: 32px; }
 .panel-label { color: var(--teal-bright); font-size: .7rem; letter-spacing: .14em; margin: 0 0 34px; }
-.metric-placeholder { border-top: 1px solid rgba(255,255,255,.15); display: flex; justify-content: space-between; padding: 20px 0; }
+.metric-placeholder { border-top: 1px solid rgba(255,255,255,.15); display: flex; flex-direction: column; gap: 10px; padding: 20px 0; }
 .metric-placeholder strong { font-family: "Cascadia Code", monospace; font-size: .82rem; }
 .metric-placeholder span { color: #aebdb8; font-size: .72rem; }
 .metrics-note { color: #91a39d; font-size: .72rem; line-height: 1.65; margin: 25px 0 0; }
 
 .quickstart { align-items: start; background: var(--paper-deep); border-block: 1px solid var(--line); display: grid; gap: min(7vw, 48px); grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); max-width: none; width: min(1180px, calc(100% - 48px)); margin-inline: auto; padding-inline: 24px; }
-.quickstart h2 { font-size: clamp(2rem, 3vw, 3.2rem); letter-spacing: -.04em; line-height: 1.15; }
+.quickstart h2 { font-size: clamp(1.8rem, 2.6vw, 2.5rem); letter-spacing: -.04em; line-height: 1.15; }
 .quickstart-copy > p:not(.kicker) { color: var(--muted); line-height: 1.75; margin-bottom: 0; }
 .route-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .route-tags span { border: 1px solid var(--line); border-radius: 99px; font-family: "Cascadia Code", monospace; font-size: .65rem; padding: 7px 10px; }
@@ -130,13 +126,13 @@ code, pre, .kicker, .card-index, .panel-label, .boundary-state { font-family: "C
 .code-window code { color: #bce7df; font-size: .78rem; line-height: 1.9; }
 .copy-status { height: 1px; margin: 0; overflow: hidden; width: 1px; }
 
-.boundary-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); margin-top: 50px; }
-.boundary-grid article { border: 1px solid var(--line); border-radius: 5px; min-height: 260px; padding: 28px; }
+.boundary-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); margin-top: 34px; }
+.boundary-grid article { border: 1px solid var(--line); border-radius: 5px; min-height: 235px; padding: 28px; }
 .boundary-state { border-radius: 99px; display: inline-block; font-size: .62rem; font-weight: 900; letter-spacing: .1em; padding: 6px 9px; }
 .boundary-state.local { background: rgba(20,95,87,.12); color: var(--teal); }
 .boundary-state.optional { background: rgba(209,138,49,.15); color: #8c560f; }
 .boundary-state.blocked { background: rgba(196,94,72,.13); color: #963c2b; }
-.boundary-grid h3 { font-size: 1.45rem; margin: 55px 0 13px; }
+.boundary-grid h3 { font-size: 1.25rem; margin: 28px 0 13px; }
 .boundary-grid p { color: var(--muted); font-size: .88rem; line-height: 1.75; }
 
 .ownership { align-items: start; border-top: 1px solid var(--line); display: grid; gap: 60px; grid-template-columns: .85fr 1.15fr; }
@@ -153,7 +149,10 @@ footer > a { font-family: "Cascadia Code", monospace; font-size: .72rem; justify
   .site-header { grid-template-columns: 1fr auto; }
   .site-header nav { display: none; }
   .hero { grid-template-columns: 1fr; }
-  .hero-copy { padding-top: 35px; }
+  .hero-copy { padding-top: 0; }
+  .hero { gap: 36px; min-height: auto; }
+  .hero-lede { max-width: 620px; }
+  .flow-console { max-width: 640px; width: 100%; }
   .proof-strip { grid-template-columns: 1fr 1fr; }
   .proof-strip div:nth-child(2) { border-right: 0; }
   .architecture-grid, .boundary-grid { grid-template-columns: 1fr; }
@@ -167,17 +166,17 @@ footer > a { font-family: "Cascadia Code", monospace; font-size: .72rem; justify
 
 @media (max-width: 620px) {
   .section-shell { width: min(100% - 28px, 1180px); }
-  .section-block { padding-block: 78px; }
+  .section-block { padding-block: 56px; }
   .site-header { height: 62px; padding-inline: 14px; }
-  .hero { min-height: auto; padding-block: 68px; }
-  .hero-copy h1 { font-size: 3.2rem; }
+  .hero { min-height: auto; padding-block: 44px; }
+  .hero-copy h1 { font-size: clamp(2rem, 8.4vw, 2.7rem); }
   .hero-actions { align-items: stretch; flex-direction: column; }
   .button { justify-content: center; }
   .flow-console { min-height: 0; }
   .flow-body { padding: 38px 24px 28px; }
   .proof-strip { grid-template-columns: 1fr; }
   .proof-strip div { border-bottom: 1px solid var(--line); border-right: 0; min-height: 95px; }
-  .section-heading h2, .quickstart h2, .ownership h2 { font-size: 2.6rem; }
+  .section-heading h2, .quickstart h2, .ownership h2 { font-size: 1.8rem; }
   .capability-list article { grid-template-columns: 1fr; gap: 10px; }
   .capability-list article p { grid-column: auto; }
   .quickstart { padding-inline: 14px; }
@@ -189,3 +188,29 @@ footer > a { font-family: "Cascadia Code", monospace; font-size: .72rem; justify
   html { scroll-behavior: auto; }
   * { transition: none!important; }
 }
+
+/* Shared reading rhythm and balanced Chinese typography. */
+section[id] { scroll-margin-top: 94px; }
+.hero-copy h1 .hero-intro { color: var(--muted); font-size: .39em; letter-spacing: .01em; line-height: 1.7; font-weight: 500; margin-bottom: 14px; }
+.hero-copy .kicker { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; letter-spacing: .09em; }
+.release-badge { border: 1px solid var(--line); border-radius: 99px; padding: 5px 9px; color: var(--muted); font-size: .65rem; font-weight: 500; letter-spacing: 0; }
+.hero-copy, .flow-console, .architecture-card, .metrics-panel, .quickstart-copy { min-width: 0; }
+.flow-steps li { font-family: inherit; font-size: .82rem; min-height: 43px; }
+.flow-steps li span { flex: 0 0 32px; font-size: .7rem; }
+.flow-body > p { min-height: 76px; }
+.flow-body > .flow-eyebrow { min-height: 0; }
+.architecture-card > code { color: var(--teal); display: block; font-size: .69rem; margin-top: 24px; overflow-wrap: anywhere; }
+.section-block + .section-block:not(.quickstart) { border-top: 1px solid var(--line); }
+.quickstart { border-radius: 12px; padding-block: 44px; padding-inline: 32px; }
+.code-window pre { padding: 24px; }
+.code-window code { font-size: .73rem; }
+.metrics-panel { align-self: start; border-radius: 10px; }
+.ownership { grid-template-columns: 1.3fr 1fr; align-items: center; }
+.ownership h2 { font-size: clamp(1.6rem, 2.3vw, 2.1rem); }
+.ownership p { color: var(--muted); line-height: 1.8; max-width: 540px; }
+.closing-links { display: grid; gap: 12px; }
+.closing-links a { display: flex; justify-content: space-between; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.4); font-size: .9rem; }
+.closing-links a:hover { border-color: var(--teal); color: var(--teal); }
+@media (min-width: 961px) and (max-width: 1100px) { .hero { gap: 32px; } .hero-actions { gap: 8px; } .button { font-size: .8rem; padding-inline: 12px; } }
+@media (max-width: 960px) { .ownership { grid-template-columns: 1fr; gap: 24px; } .flow-console { max-width: none; } }
+@media (max-width: 620px) { .hero-copy h1 .hero-intro { font-size: .43em; } .quickstart { padding: 32px 16px; } .flow-body { padding: 26px 22px; } .architecture-card { padding: 25px; } .proof-strip { grid-template-columns: 1fr 1fr; } .proof-strip div { padding: 20px 16px; } .proof-strip strong { font-size: .88rem; } .flow-steps li { font-size: .76rem; } }
