@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-Langhuan 0.2 deliberately has one installable Python package and one configuration file.
+Langhuan 0.3 has one installable Python package and one configuration file.
 
 1. `reader.py` interprets the Obsidian-specific syntax and emits normalized metadata without absolute source paths.
 2. `catalog.py` maintains a body-free structural inventory, collection registry and optional reading-ledger checks.
@@ -21,11 +21,10 @@ The public reference backend uses a JSON artifact because it is inspectable, dep
 Agents call a process boundary rather than importing private Python internals:
 
 ```text
-langhuan catalog envelope --path "Sources/Books/Example.md" --workflow auto --action update --compact
-langhuan catalog find "existing concept" --collection concepts
-langhuan catalog context --query "known title or alias" --compact
 langhuan sync
-langhuan ask "question" --scope project-name --json
+langhuan ask "question across subjects" --output source-candidates.json
+langhuan catalog read --sources source-candidates.json --select 1 2 --max-chars 12000
+langhuan catalog find --query "known concept" --json
 ```
 
 JSON results contain a relative source path, heading path, chunk identifier, score and evidence text. The caller decides how much context to place in its prompt and whether a stable conclusion deserves long-term memory.
@@ -50,20 +49,24 @@ inferred from a subject label. A collection that references an undeclared proces
 rejected during configuration loading, and an undeclared runtime value blocks its Task
 Envelope instead of silently dropping mandatory checks.
 
-Every agent follows the same process contract:
+Reading and editing are intentionally separate paths. For ordinary reading, use the
+Catalog to locate files and RAG to discover content across collections, then open the
+selected sections from the current Markdown source with `catalog read`. A read does not
+require a Task Envelope or a task trace, and retrieval rank does not establish that a
+claim is true or understood. After context compaction, recover only the relevant paths,
+open questions and relationships for the next task; do not re-read unchanged entrypoints
+by rote.
 
-1. Regenerate a bounded Task Envelope for the target at task start, after compaction,
-   or after the target, workflow, action, or scope changes. Use `status` plus `find` or
-   diagnostic `context` only when no target is known.
-2. Execute every required check. Treat processors and related collections as routing
-   priorities rather than completeness whitelists: extract candidates from the actual
-   content, resolve exact identities and graph signals, then use lexical/semantic
-   retrieval when cross-domain discovery is required.
-3. Ensure a stable ID before creating, copying, moving, renaming, merging, splitting,
-   or deleting a durable note.
-4. Give concurrent agents non-overlapping file ownership.
-5. After writes, refresh Catalog, refresh the RAG inputs that changed, and run the
-   repository's unified machine-readable verification command.
+For durable operations handled through Langhuan's controlled workflow, a Task Envelope
+can provide operation-specific entrypoints and checks. Execute the checks required by the
+selected Processor, and treat collections and related routes as discovery hints rather
+than completeness whitelists. Extract candidates from the actual content, resolve exact
+identities and graph signals, then use lexical or semantic retrieval when cross-domain
+discovery is needed. Ensure a stable ID before creating, copying, moving, renaming,
+merging, splitting or deleting a durable note. After writes, refresh the Catalog and
+changed RAG inputs, then run the relevant repository verification. These controls apply
+to the operation that needs them; they are not prerequisites for ordinary reading or
+manual edits outside that controlled workflow.
 
 Semantic Agent behavior is evaluated separately from structural correctness. The
 `catalog evaluate-agent` command consumes explicit case definitions and evidence-only

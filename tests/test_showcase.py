@@ -31,6 +31,10 @@ class ShowcaseTests(unittest.TestCase):
         self.assertIn("让 Agent 在你的知识库中", html)
         self.assertIn("langhuan demo", html)
         self.assertIn("公开版本提供演示知识库", html)
+        self.assertIn("普通阅读不必先登记任务", html)
+        self.assertIn("选择来源", html)
+        self.assertIn("当前 Markdown", html)
+        self.assertNotIn("57 项", html)
         self.assertNotIn("single-writer", html)
         self.assertNotIn("react-loading-skeleton", html)
 

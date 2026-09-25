@@ -5,6 +5,7 @@ import importlib.util
 import json
 import sys
 import tempfile
+from collections import OrderedDict
 from pathlib import Path
 from typing import Sequence
 
@@ -36,6 +37,7 @@ from .observability import (
     start_trace,
 )
 from .observability_export import export_events
+from .reader import read_sections
 from .search import search
 
 
@@ -143,6 +145,16 @@ def _sync(args: argparse.Namespace, force: bool) -> int:
 
 def cmd_ask(args: argparse.Namespace) -> int:
     settings = load_config(args.config)
+    output_path = None
+    if args.output:
+        name = Path(args.output)
+        if name.is_absolute() or name.name != args.output or args.output in {".", ".."}:
+            raise ValueError(
+                "--output must be one new filename inside the local .langhuan data directory"
+            )
+        output_path = settings.data_dir / name
+        if output_path.exists():
+            raise ValueError("--output already exists; choose a new filename so stale candidates cannot be reused")
     results = search(settings, args.query, top_k=args.top_k, scope=args.scope)
     log_event(
         settings,
@@ -150,7 +162,64 @@ def cmd_ask(args: argparse.Namespace) -> int:
         {"results": len(results), "scope": args.scope or ""},
         query=args.query,
     )
-    if args.json:
+    if args.output:
+        sources: OrderedDict[str, dict[str, object]] = OrderedDict()
+        for rank, result in enumerate(results, 1):
+            metadata = result["metadata"]
+            path = str(metadata["relative_path"])
+            source = sources.setdefault(
+                path,
+                {
+                    "id": len(sources) + 1,
+                    "path": path,
+                    "title": metadata.get("title", Path(path).stem),
+                    "headings": [],
+                    "matches": [],
+                },
+            )
+            heading = str(metadata.get("heading_path", ""))
+            if heading not in source["headings"]:
+                source["headings"].append(heading)
+            source["matches"].append(
+                {
+                    "rank": rank,
+                    "heading": heading,
+                    "score": result["score"],
+                    "excerpt": result["text"][:900],
+                    "excerpt_truncated": len(result["text"]) > 900,
+                }
+            )
+        payload = {
+            "schema": "langhuan/source-candidates/v1",
+            "status": "ok",
+            "sources": list(sources.values()),
+            "note": "Ranked index matches, not verified claims. Read selected sections from current Markdown files.",
+        }
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with output_path.open("x", encoding="utf-8", newline="\n") as handle:
+                json.dump(payload, handle, ensure_ascii=False, indent=2)
+                handle.write("\n")
+        except OSError as exc:
+            raise RuntimeError(
+                "could not save candidate JSON in the local data directory"
+            ) from exc
+        print(_json({
+            "status": "ok",
+            "saved": output_path.relative_to(settings.data_dir.parent).as_posix(),
+            "sources": [
+                {
+                    "id": source["id"],
+                    "path": source["path"],
+                    "title": source["title"],
+                    "headings": source["headings"],
+                    "preview": source["matches"][0]["excerpt"][:360],
+                }
+                for source in sources.values()
+            ],
+            "note": "Indexed candidates may be stale; use catalog read to open current Markdown.",
+        }))
+    elif args.json:
         print(_json(results))
     elif not results:
         print("No matching context found.")
@@ -161,6 +230,144 @@ def cmd_ask(args: argparse.Namespace) -> int:
             print(result["text"])
             print()
     return 0
+
+
+def cmd_catalog_read(args: argparse.Namespace) -> int:
+    settings = load_config(args.config)
+    if args.max_chars < 1 or args.max_chars > 100_000:
+        raise ValueError("--max-chars must be between 1 and 100000")
+    if bool(args.path) == bool(args.sources):
+        raise ValueError("read requires exactly one of --path or --sources")
+    if args.sources and not args.select:
+        raise ValueError("read --sources requires one or more --select source ids")
+    if args.sources and args.heading:
+        raise ValueError(
+            "--heading can only be used with --path; candidate files carry their headings"
+        )
+    if args.path and args.select:
+        raise ValueError("--select can only be used with --sources")
+
+    if args.path:
+        try:
+            result = read_sections(
+                settings.vault,
+                args.path,
+                args.heading,
+                max_chars=args.max_chars,
+                include=settings.include,
+                exclude=settings.exclude,
+            )
+        except (OSError, UnicodeError) as exc:
+            raise ValueError("source Markdown file could not be read") from exc
+        print(_json(result, compact=args.compact))
+        return 0 if result["status"] == "ok" else 1
+
+    if (
+        Path(args.sources).name != args.sources
+        or "/" in args.sources
+        or "\\" in args.sources
+        or args.sources in {".", ".."}
+    ):
+        raise ValueError(
+            "--sources must be a filename inside the local .langhuan data directory"
+        )
+    source_path = settings.data_dir / args.sources
+    try:
+        resolved_source = source_path.resolve(strict=True)
+        resolved_data_dir = settings.data_dir.resolve()
+    except OSError as exc:
+        raise ValueError(
+            "--sources must name a candidate JSON file inside the local .langhuan data directory"
+        ) from exc
+    if not source_path.is_file() or not resolved_source.is_relative_to(resolved_data_dir):
+        raise ValueError(
+            "--sources must name a candidate JSON file inside the local .langhuan data directory"
+        )
+    try:
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("candidate file is unreadable or invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("candidate file must contain a JSON object")
+    if payload.get("schema") != "langhuan/source-candidates/v1" or payload.get("status") != "ok":
+        raise ValueError("--sources does not contain a successful Langhuan candidate response")
+    sources = payload.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError("candidate response has no sources list")
+    by_id: dict[str, dict[str, object]] = {}
+    for source in sources:
+        if not isinstance(source, dict) or "id" not in source:
+            raise ValueError("candidate response contains an invalid source")
+        source_id = str(source["id"])
+        if source_id in by_id:
+            raise ValueError("candidate response contains duplicate source ids")
+        by_id[source_id] = source
+    unknown = [item for item in args.select if item not in by_id]
+    if unknown:
+        raise ValueError(f"unknown candidate source id(s): {', '.join(unknown)}")
+
+    sections: list[dict[str, object]] = []
+    remaining = args.max_chars
+    unprocessed_sources = False
+    for source_index, source_id in enumerate(args.select):
+        source = by_id[source_id]
+        headings = source.get("headings")
+        if not isinstance(headings, list) or not all(
+            isinstance(item, str) for item in headings
+        ):
+            raise ValueError(f"candidate source {source_id} has invalid headings")
+        try:
+            result = read_sections(
+                settings.vault,
+                str(source.get("path", "")),
+                headings,
+                max_chars=remaining,
+                include=settings.include,
+                exclude=settings.exclude,
+            )
+        except (OSError, UnicodeError) as exc:
+            sections.append({
+                "source_id": source_id,
+                "path": str(source.get("path", "")),
+                "status": "failed",
+                "error": "source Markdown file could not be read",
+            })
+            continue
+        except ValueError as exc:
+            sections.append({
+                "source_id": source_id,
+                "path": str(source.get("path", "")),
+                "status": "failed",
+                "error": str(exc),
+            })
+            continue
+        if result["status"] != "ok":
+            sections.append({"source_id": source_id, **result})
+            continue
+        sections.extend(
+            {"source_id": source_id, "path": result["path"], **item}
+            for item in result["sections"]
+        )
+        remaining -= result["returned_chars"]
+        if remaining <= 0:
+            unprocessed_sources = source_index < len(args.select) - 1
+            break
+    status = (
+        "ok"
+        if all(item.get("status", "ok") == "ok" for item in sections)
+        else "partial"
+    )
+    output = {
+        "schema": "langhuan/source-reading/v1",
+        "status": status,
+        "sections": sections,
+        "max_chars": args.max_chars,
+        "returned_chars": sum(len(str(item.get("text", ""))) for item in sections),
+        "truncated": unprocessed_sources
+        or any(item.get("truncated") for item in sections),
+    }
+    print(_json(output, compact=args.compact))
+    return 0 if status == "ok" else 1
 
 
 def cmd_demo(_args: argparse.Namespace) -> int:
@@ -205,6 +412,11 @@ def cmd_catalog_sync(args: argparse.Namespace) -> int:
 
 def cmd_catalog_find(args: argparse.Namespace) -> int:
     settings = load_config(args.config)
+    query = args.query_option or args.query
+    if args.query_option and args.query:
+        raise ValueError("provide the search query either positionally or with --query, not both")
+    if not query:
+        raise ValueError("catalog find requires a query")
     if args.collection and args.collection not in settings.catalog.collections:
         available = ", ".join(settings.catalog.collections) or "none"
         raise ValueError(
@@ -213,7 +425,7 @@ def cmd_catalog_find(args: argparse.Namespace) -> int:
     catalog, sync = sync_catalog(settings)
     page = find_catalog_page(
         catalog,
-        args.query,
+        query,
         collection=args.collection,
         under=args.under,
         note_type=args.type,
@@ -499,6 +711,11 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--top-k", type=int, default=None)
     ask.add_argument("--scope", default=None)
     ask.add_argument("--json", action="store_true")
+    ask.add_argument(
+        "--output",
+        default=None,
+        help="Save grouped source candidates as a new JSON file inside the local .langhuan data directory",
+    )
     ask.set_defaults(function=cmd_ask)
 
     demo = commands.add_parser("demo", help="Run a self-contained offline smoke test.")
@@ -521,7 +738,13 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_find = catalog_commands.add_parser(
         "find", help="Find files by relative path, stem, title or alias."
     )
-    catalog_find.add_argument("query")
+    catalog_find.add_argument("query", nargs="?")
+    catalog_find.add_argument("--query", dest="query_option", default=None)
+    catalog_find.add_argument(
+        "--json",
+        action="store_true",
+        help="Accepted for compatibility; output is always JSON.",
+    )
     catalog_find.add_argument("--config", default=None)
     catalog_find.add_argument("--collection", default=None)
     catalog_find.add_argument("--under", default=None)
@@ -532,6 +755,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     catalog_find.add_argument("--compact", action="store_true")
     catalog_find.set_defaults(function=cmd_catalog_find)
+
+    catalog_read = catalog_commands.add_parser(
+        "read", help="Read selected source sections from current Markdown files."
+    )
+    catalog_read_scope = catalog_read.add_mutually_exclusive_group(required=True)
+    catalog_read_scope.add_argument("--path", default=None, help="Vault-relative Markdown path")
+    catalog_read_scope.add_argument(
+        "--sources", default=None, help="Candidate JSON filename saved by `ask --output`"
+    )
+    catalog_read.add_argument(
+        "--heading",
+        action="append",
+        default=[],
+        help="Exact full heading path or unique heading title; repeatable",
+    )
+    catalog_read.add_argument(
+        "--select",
+        nargs="+",
+        default=[],
+        help="Source ids to open from the candidate file",
+    )
+    catalog_read.add_argument("--max-chars", type=int, default=12_000)
+    catalog_read.add_argument("--config", default=None)
+    catalog_read.add_argument("--compact", action="store_true")
+    catalog_read.set_defaults(function=cmd_catalog_read)
 
     catalog_resolve = catalog_commands.add_parser(
         "resolve", help="Resolve one current note by stable ID or exact relative path."

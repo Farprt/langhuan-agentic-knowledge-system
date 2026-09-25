@@ -2,13 +2,13 @@
 
 **面向 Obsidian / Markdown 项目的本地优先 Agent 知识库工具。**
 
-Langhuan 让 Agent 能够检索笔记正文、定位已有文件，并在修改前取得这次任务需要阅读的文件和检查项。核心功能可完全离线运行；长期记忆和云端分析都是可选集成。
+Langhuan 让 Agent 能够检索笔记正文、定位已有文件，并从候选来源读取当前 Markdown。受控修改时也可取得目标入口和对应检查。核心功能可完全离线运行；长期记忆和云端分析都是可选集成。
 
 ![Langhuan Agentic Knowledge System](showcase/public/og.png)
 
 [打开交互式项目总览](https://farprt.github.io/langhuan-agentic-knowledge-system/)
 
-> 当前为 `0.2.0`（Alpha）：检索、结构定位和本地运行记录均可独立使用。公开基准指标仍待在固定数据集上实测；`ask` 只返回检索证据，不伪装成完整问答 Agent。
+> 当前为 `0.3.0`（Alpha）：检索、结构定位和按需原文阅读可独立使用。公开基准指标仍待在固定数据集上实测；`ask` 只返回检索证据，不生成答案。
 
 ## 已实现
 
@@ -19,6 +19,7 @@ Langhuan 让 Agent 能够检索笔记正文、定位已有文件，并在修改�
 - 提供零依赖的离线演示，也可以显式加载本地 BGE 模型；
 - 通过 `scope` 把检索限制在指定项目或目录；
 - 生成不含笔记正文的结构索引，帮助 Agent 精确定位文件；
+- 按来源编号或已知路径读取当前 Markdown 小节，保留路径并限制返回长度；
 - 为单个目标生成小型任务上下文包，列出应阅读文件和必须执行的检查；
 - 默认只在本地记录运行元数据，并可显式导出到 AgentLoop 或 Langfuse。
 
@@ -47,7 +48,7 @@ flowchart LR
 |---|---|---|
 | 正文检索 | RAG | 从笔记正文中找出与问题相关的片段。 |
 | 结构索引 | Catalog | 记录文件路径、标题、别名和显式链接，不保存正文。 |
-| 任务上下文包 | Task Envelope | 针对一个目标返回应阅读文件、处理方式和必须检查的项目。 |
+| 操作上下文包 | Task Envelope | 在受控写入或路径生命周期操作中，针对目标返回入口和相关检查；普通阅读不要求使用。 |
 | 处理记录 | Reading Ledger | 可选记录原始材料、草稿和正式笔记之间的对应与清理状态。 |
 
 这些名称对应代码接口，不要求使用者接受一套新的知识管理术语。可以简单理解为：RAG 负责“找内容”，结构索引负责“找文件”，任务上下文包负责“这次该读什么、检查什么”，处理记录负责“这份材料处理到哪一步”。
@@ -150,7 +151,7 @@ Langhuan 不会隐式访问 Hugging Face。这样可以区分“安装或更新�
 
 ### 统一运行记录
 
-`catalog envelope` 默认在本地建立或复用当前 Agent 会话的运行记录，并返回用于关联同一次任务的 `trace_id`、`run_id` 和脱敏会话标识。后续检索、工具调用和验证步骤可以写入同一事件队列：
+`catalog envelope` 在需要操作上下文时可于本地建立或复用当前 Agent 会话的运行记录，并返回用于关联同一次任务的 `trace_id`、`run_id` 和脱敏会话标识。普通检索与原文阅读不需要先调用它。后续检索、工具调用和验证步骤可以写入同一事件队列：
 
 ```powershell
 langhuan catalog envelope --path "Projects/RAG.md" --workflow auto --action update --compact
@@ -224,7 +225,7 @@ langhuan catalog evaluate-agent --cases agent-evaluation-cases.json --submission
 
 `envelope`、`find`、`context` 和 `validate` 会先刷新结构索引，再返回稳定 JSON。`--compact` 只删除排版空白，适合把结果交给 Agent，字段含义不会改变。
 
-目标文件已知时，使用 `envelope` 生成任务上下文包。它根据目标类型选择“处理输入”“更新笔记”或“更新项目”，并返回目标文件、应读取入口和必须执行的检查。默认紧凑结果限制在约 2,000 个字符内。
+普通阅读不需要先生成 Envelope。对已知目标进行写入、移动、重命名或删除时，可用 `envelope` 查看该目标的入口和对应检查。
 
 目标未知时：
 
@@ -232,7 +233,14 @@ langhuan catalog evaluate-agent --cases agent-evaluation-cases.json --submission
 - `context --query` 只做词面候选查找，不声称理解自然语言语义，也不保证查全；
 - `context --global` 显式查看全部分类规则；
 - `catalog list --all` 显式列出全部相对路径；
-- 词面查找无结果时，再使用正文检索进行语义发现。
+- `ask` 用正文语义与关键词检索发现任意目录下的候选笔记；需要直接读取时，先保存候选，再选择来源读取当前 Markdown 原文：
+
+```powershell
+langhuan ask "OFDM 中的同步与 CFO 和论文模型的关系" --output candidates.json
+langhuan catalog read --sources candidates.json --select 1 2 --max-chars 12000
+```
+
+`ask --output` 按文件分组保存候选及匹配标题到本地 `.langhuan` 目录，拒绝覆盖同名文件，并在终端显示可选编号、路径、标题和短摘录。根据结果中的来源编号用 `--select` 打开笔记；`catalog read --path ... --heading ...` 也可以直接读取已知路径的小节。读取遵守配置中的 `include` / `exclude` 范围，逐段保留来源路径并限制字符数；索引摘录可能过期，候选排名也不代表事实已核实。需要机器处理时可给 `catalog find` 使用 `--json`；该命令本身始终返回 JSON。
 
 `.langhuan/catalog.json` 是可以随时重建的本地文件，不进入 Git。长期笔记可以使用 `note_<32位小写十六进制>` 形式的稳定 ID；移动文件时 ID 保持不变。没有 ID 的旧笔记仍可读取，但在复制、移动、重命名、合并、拆分或删除前应先执行 `ensure-id`。
 

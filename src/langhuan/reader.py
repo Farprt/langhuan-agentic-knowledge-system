@@ -184,6 +184,182 @@ def read_markdown(path: Path, vault_root: Path) -> ObsidianDocument:
     return ObsidianDocument(path, relative_path, body, vector_text, frontmatter, metadata)
 
 
+def read_sections(
+    vault_root: Path,
+    relative_path: str,
+    headings: list[str] | tuple[str, ...] = (),
+    *,
+    max_chars: int = 12_000,
+    include: tuple[str, ...] = (".",),
+    exclude: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Read selected Markdown sections from the current vault, never from an index."""
+    raw_path = relative_path.replace("\\", "/")
+    candidate = Path(raw_path)
+    if (
+        not raw_path.strip()
+        or candidate.is_absolute()
+        or raw_path.startswith("/")
+        or re.match(r"^[A-Za-z]:", raw_path)
+        or ".." in candidate.parts
+    ):
+        raise ValueError("path must be a relative Markdown path inside the vault")
+    if max_chars < 1 or max_chars > 100_000:
+        raise ValueError("max_chars must be between 1 and 100000")
+
+    root = vault_root.resolve()
+    path = (root / candidate).resolve()
+    if not path.is_relative_to(root) or path.suffix.casefold() != ".md" or not path.is_file():
+        raise ValueError("path must resolve to a Markdown file inside the vault")
+    resolved_relative = normalize_path(path.relative_to(root))
+    if (include and not any(_under_prefix(resolved_relative, prefix) for prefix in include)) or any(
+        _under_prefix(resolved_relative, prefix) for prefix in exclude
+    ):
+        raise ValueError("path is outside the configured retrieval scope")
+    document = read_markdown(path, root)
+    lines = document.body.splitlines()
+
+    records: list[dict[str, Any]] = []
+    parents: list[tuple[int, str]] = []
+    fence: tuple[str, int] | None = None
+    in_comment = False
+    heading_re = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.+?)\s*#*\s*$")
+    for index, line in enumerate(lines):
+        if fence:
+            fence_match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+            if (
+                fence_match
+                and fence_match.group(1)[0] == fence[0]
+                and len(fence_match.group(1)) >= fence[1]
+                and not fence_match.group(2).strip()
+            ):
+                fence = None
+            continue
+        visible: list[str] = []
+        cursor = 0
+        while cursor < len(line):
+            if in_comment:
+                end = line.find("-->", cursor)
+                if end < 0:
+                    cursor = len(line)
+                    continue
+                cursor = end + 3
+                in_comment = False
+                continue
+            start = line.find("<!--", cursor)
+            if start < 0:
+                visible.append(line[cursor:])
+                break
+            visible.append(line[cursor:start])
+            cursor = start + 4
+            in_comment = True
+        visible_line = "".join(visible)
+        fence_match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", visible_line)
+        if fence_match and not (fence_match.group(1)[0] == "`" and "`" in fence_match.group(2)):
+            fence = (fence_match.group(1)[0], len(fence_match.group(1)))
+            continue
+        match = heading_re.match(visible_line)
+        if not match:
+            continue
+        level = len(match.group(1))
+        title = match.group(2).strip()
+        while parents and parents[-1][0] >= level:
+            parents.pop()
+        parents.append((level, title))
+        records.append(
+            {
+                "start": index,
+                "level": level,
+                "title": title,
+                "path": " > ".join(parent[1] for parent in parents),
+            }
+        )
+
+    requested = list(headings)
+    if not requested or any(not str(query).strip() for query in requested):
+        text = "\n".join(lines).strip()
+        passage = text[:max_chars]
+        truncated = len(passage) < len(text)
+        return {
+            "schema": "langhuan/source-reading/v1",
+            "status": "ok",
+            "path": document.relative_path,
+            "sections": [{"heading": "", "text": passage, "truncated": truncated}],
+            "max_chars": max_chars,
+            "returned_chars": len(passage),
+            "truncated": truncated,
+        }
+    selected: list[dict[str, Any]] = []
+    missing: list[str] = []
+    ambiguous: dict[str, list[str]] = {}
+    for query in requested:
+        key = query.strip().casefold()
+        exact_path = [item for item in records if item["path"].casefold() == key]
+        matches = exact_path or [item for item in records if item["title"].casefold() == key]
+        if not matches:
+            missing.append(query)
+        elif len(matches) > 1:
+            ambiguous[query] = [item["path"] for item in matches]
+        else:
+            selected.append(matches[0])
+    if ambiguous:
+        return {
+            "schema": "langhuan/source-reading/v1",
+            "status": "ambiguous",
+            "path": document.relative_path,
+            "ambiguous_headings": ambiguous,
+            "missing_headings": missing,
+            "sections": [],
+            "truncated": False,
+        }
+    if missing:
+        return {
+            "schema": "langhuan/source-reading/v1",
+            "status": "not_found",
+            "path": document.relative_path,
+            "missing_headings": missing,
+            "sections": [],
+            "truncated": False,
+        }
+    selected = sorted(
+        {item["start"]: item for item in selected}.values(),
+        key=lambda item: item["start"],
+    )
+    # A selected parent section already contains all of its child headings.
+    # Avoid returning the same text twice when both are requested.
+    selected = [
+        item
+        for item in selected
+        if not any(
+            parent["start"] < item["start"]
+            and item["path"].startswith(parent["path"] + " > ")
+            for parent in selected
+        )
+    ]
+    passages: list[dict[str, Any]] = []
+    remaining = max_chars
+    for item in selected:
+        end = len(lines)
+        for candidate_heading in records:
+            if candidate_heading["start"] > item["start"] and candidate_heading["level"] <= item["level"]:
+                end = candidate_heading["start"]
+                break
+        text = "\n".join(lines[item["start"] : end]).strip()
+        piece = text[:remaining]
+        passages.append(
+            {"heading": item["path"], "text": piece, "truncated": len(piece) < len(text)}
+        )
+        remaining -= len(piece)
+        if remaining <= 0:
+            break
+    return {
+        "schema": "langhuan/source-reading/v1", "status": "ok", "path": document.relative_path,
+        "sections": passages, "max_chars": max_chars,
+        "returned_chars": sum(len(item["text"]) for item in passages),
+        "truncated": any(item["truncated"] for item in passages) or len(passages) < len(selected),
+    }
+
+
 def _under_prefix(path: str, prefix: str) -> bool:
     prefix = prefix.strip("/")
     return prefix in {"", "."} or path == prefix or path.startswith(prefix + "/")

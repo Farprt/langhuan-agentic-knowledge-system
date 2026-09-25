@@ -1,3 +1,3 @@
-"""Langhuan: local-first retrieval and task context for Markdown projects."""
+"""Langhuan: local-first knowledge discovery and source reading for Markdown vaults."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
